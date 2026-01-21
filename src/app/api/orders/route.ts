@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/db/connection';
 import { ensureRole, getAuthContext, Role } from '@/lib/auth';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 
 const ORDER_STATUSES = [
   'RECIBIDO',
@@ -13,80 +13,60 @@ const ORDER_STATUSES = [
 ] as const;
 const ORDER_TYPES = ['DINEIN', 'TAKEOUT', 'DELIVERY'] as const;
 const ITEM_STATIONS = ['PLANCHA', 'FREIDORA'] as const;
+const ITEM_STATUSES = ['EN_COLA', 'PENDIENTE', 'EN_PREPARACION', 'LISTO'] as const;
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
 }
 
-function buildOrderFilter(role: Role, station: string | null) {
-  if (role === 'PLANCHA' || role === 'FREIDORA') {
-    return {
-      clause:
-        'WHERE EXISTS (SELECT 1 FROM order_items WHERE order_items.order_id = orders.id AND station = ?) ',
-      params: [station]
-    };
-  }
-  return { clause: 'WHERE 1=1 ', params: [] };
-}
-
-function attachFilters(
-  clause: string,
-  params: unknown[],
-  filters: { status?: string | null; type?: string | null; date?: string | null }
-) {
-  const updatedParams = [...params];
-  let updatedClause = clause;
-  if (filters.status) {
-    updatedClause += 'AND status = ? ';
-    updatedParams.push(filters.status);
-  }
-  if (filters.type) {
-    updatedClause += 'AND type = ? ';
-    updatedParams.push(filters.type);
-  }
-  if (filters.date) {
-    updatedClause += 'AND order_date = ? ';
-    updatedParams.push(filters.date);
-  }
-  return { clause: updatedClause, params: updatedParams };
-}
-
-function fetchOrders(
+async function fetchOrders(
   role: Role,
   station: string | null,
   filters: { status?: string | null; type?: string | null; date?: string | null }
 ) {
-  const db = getDb();
-  const base = buildOrderFilter(role, station);
-  const withFilters = attachFilters(base.clause, base.params, filters);
+  let query = supabaseAdmin.from('orders').select('*').order('created_at', { ascending: false });
+  if (filters.status) {
+    query = query.eq('status', filters.status);
+  }
+  if (filters.type) {
+    query = query.eq('type', filters.type);
+  }
+  if (filters.date) {
+    query = query.eq('order_date', filters.date);
+  }
 
-  const orders = db
-    .prepare(`SELECT * FROM orders ${withFilters.clause} ORDER BY created_at DESC`)
-    .all(...withFilters.params);
+  const { data: orders, error } = await query;
+  if (error) {
+    throw new Error(error.message);
+  }
 
-  if (orders.length === 0) {
+  if (!orders || orders.length === 0) {
     return [];
   }
 
   const orderIds = orders.map((order) => order.id);
-  const placeholders = orderIds.map(() => '?').join(',');
-  const stationFilter = role === 'PLANCHA' || role === 'FREIDORA' ? ' AND station = ?' : '';
-  const items = db
-    .prepare(`SELECT * FROM order_items WHERE order_id IN (${placeholders})${stationFilter}`)
-    .all(
-      ...(role === 'PLANCHA' || role === 'FREIDORA'
-        ? [...orderIds, station]
-        : orderIds)
-    );
+  let itemsQuery = supabaseAdmin.from('order_items').select('*').in('order_id', orderIds);
+  if (station) {
+    itemsQuery = itemsQuery.eq('station', station);
+  }
+  const { data: items, error: itemsError } = await itemsQuery;
+  if (itemsError) {
+    throw new Error(itemsError.message);
+  }
 
   const itemsByOrder = new Map<number, any[]>();
-  for (const item of items) {
+  for (const item of items ?? []) {
     const list = itemsByOrder.get(item.order_id) ?? [];
     list.push(item);
     itemsByOrder.set(item.order_id, list);
   }
 
-  return orders.map((order) => ({
+  const filteredOrders =
+    role === 'PLANCHA' || role === 'FREIDORA'
+      ? orders.filter((order) => (itemsByOrder.get(order.id) ?? []).length > 0)
+      : orders;
+
+  return filteredOrders.map((order) => ({
     ...order,
     items: itemsByOrder.get(order.id) ?? []
   }));
@@ -109,8 +89,9 @@ export async function GET(request: NextRequest) {
       return jsonError('Invalid type filter');
     }
 
-    const station = auth.role === 'PLANCHA' ? 'PLANCHA' : auth.role === 'FREIDORA' ? 'FREIDORA' : null;
-    const orders = fetchOrders(auth.role, station, { status, type, date });
+    const station =
+      auth.role === 'PLANCHA' ? 'PLANCHA' : auth.role === 'FREIDORA' ? 'FREIDORA' : null;
+    const orders = await fetchOrders(auth.role, station, { status, type, date });
 
     return NextResponse.json({ orders });
   } catch (error) {
@@ -159,14 +140,11 @@ export async function POST(request: NextRequest) {
       if (!ITEM_STATIONS.includes(item.station)) {
         return jsonError('Invalid item station');
       }
+      if (item.status && !ITEM_STATUSES.includes(item.status)) {
+        return jsonError('Invalid item status');
+      }
     }
 
-    const db = getDb();
-    const today = new Date().toISOString().slice(0, 10);
-    const lastOrder = db
-      .prepare('SELECT MAX(order_number) as maxNumber FROM orders WHERE order_date = ?')
-      .get(today) as { maxNumber: number | null };
-    const nextOrderNumber = (lastOrder?.maxNumber ?? 0) + 1;
     const deliveryFee = Number.isInteger(delivery_fee_cents) ? delivery_fee_cents : 0;
     const subtotal = normalizedItems.reduce(
       (sum: number, item: any) => sum + item.price_cents_snapshot * item.qty,
@@ -174,58 +152,46 @@ export async function POST(request: NextRequest) {
     );
     const total = subtotal + deliveryFee;
 
-    const insertOrder = db.prepare(
-      `INSERT INTO orders
-        (order_date, order_number, type, status, customer_name, customer_phone, address_json, notes, subtotal_cents, delivery_fee_cents, total_cents)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    );
-
-    const insertItem = db.prepare(
-      `INSERT INTO order_items
-        (order_id, product_id, name_snapshot, price_cents_snapshot, qty, station, status, notes, group_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    );
-
-    const transaction = db.transaction(() => {
-      const orderResult = insertOrder.run(
-        today,
-        nextOrderNumber,
-        type,
-        'RECIBIDO',
-        customer_name ?? null,
-        customer_phone ?? null,
-        address_json ? JSON.stringify(address_json) : null,
-        notes ?? null,
-        subtotal,
-        deliveryFee,
-        total
-      );
-      const orderId = Number(orderResult.lastInsertRowid);
-
-      for (const item of normalizedItems) {
-        insertItem.run(
-          orderId,
-          item.product_id,
-          item.name_snapshot,
-          item.price_cents_snapshot,
-          item.qty,
-          item.station,
-          item.status,
-          item.notes,
-          item.group_id
-        );
+    const { data: orderId, error: createError } = await supabaseAdmin.rpc(
+      'create_order_with_items',
+      {
+        p_type: type,
+        p_customer_name: customer_name ?? null,
+        p_customer_phone: customer_phone ?? null,
+        p_address_json: address_json ?? null,
+        p_notes: notes ?? null,
+        p_subtotal_cents: subtotal,
+        p_delivery_fee_cents: deliveryFee,
+        p_total_cents: total,
+        p_items: normalizedItems
       }
+    );
 
-      return orderId;
-    });
+    if (createError || !orderId) {
+      throw new Error(createError?.message ?? 'Failed to create order');
+    }
 
-    const orderId = transaction();
-    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
-    const orderItems = db
-      .prepare('SELECT * FROM order_items WHERE order_id = ?')
-      .all(orderId);
+    const { data: order, error: orderError } = await supabaseAdmin
+      .from('orders')
+      .select('*')
+      .eq('id', orderId)
+      .single();
+    if (orderError || !order) {
+      throw new Error(orderError?.message ?? 'Order not found');
+    }
 
-    return NextResponse.json({ order: { ...order, items: orderItems } }, { status: 201 });
+    const { data: orderItems, error: itemsError } = await supabaseAdmin
+      .from('order_items')
+      .select('*')
+      .eq('order_id', orderId);
+    if (itemsError) {
+      throw new Error(itemsError.message);
+    }
+
+    return NextResponse.json(
+      { order: { ...order, items: orderItems ?? [] } },
+      { status: 201 }
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unauthorized';
     const status = message === 'Forbidden' ? 403 : 401;

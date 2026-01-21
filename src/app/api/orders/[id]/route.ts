@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/db/connection';
 import { ensureRole, getAuthContext, Role } from '@/lib/auth';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 
 const ORDER_STATUSES = [
   'RECIBIDO',
@@ -18,24 +18,29 @@ function jsonError(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
 }
 
-function fetchOrder(db: ReturnType<typeof getDb>, orderId: number, role: Role) {
-  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
-  if (!order) {
+async function fetchOrder(orderId: number, role: Role) {
+  const { data: order, error } = await supabaseAdmin
+    .from('orders')
+    .select('*')
+    .eq('id', orderId)
+    .single();
+  if (error || !order) {
     return null;
   }
 
-  const stationFilter = role === 'PLANCHA' || role === 'FREIDORA' ? ' AND station = ?' : '';
-  const items = db
-    .prepare(`SELECT * FROM order_items WHERE order_id = ?${stationFilter}`)
-    .all(
-      ...(role === 'PLANCHA'
-        ? [orderId, 'PLANCHA']
-        : role === 'FREIDORA'
-          ? [orderId, 'FREIDORA']
-          : [orderId])
-    );
+  let itemsQuery = supabaseAdmin.from('order_items').select('*').eq('order_id', orderId);
+  if (role === 'PLANCHA') {
+    itemsQuery = itemsQuery.eq('station', 'PLANCHA');
+  } else if (role === 'FREIDORA') {
+    itemsQuery = itemsQuery.eq('station', 'FREIDORA');
+  }
 
-  return { ...order, items };
+  const { data: items, error: itemsError } = await itemsQuery;
+  if (itemsError) {
+    throw new Error(itemsError.message);
+  }
+
+  return { ...order, items: items ?? [] };
 }
 
 export async function GET(
@@ -52,22 +57,15 @@ export async function GET(
       return jsonError('Invalid order id');
     }
 
-    const db = getDb();
-
-    if (auth.role === 'PLANCHA' || auth.role === 'FREIDORA') {
-      const station = auth.role === 'PLANCHA' ? 'PLANCHA' : 'FREIDORA';
-      const visibleOrder = db
-        .prepare(
-          `SELECT 1 FROM order_items WHERE order_id = ? AND station = ? LIMIT 1`
-        )
-        .get(orderId, station);
-      if (!visibleOrder) {
-        return jsonError('Not found', 404);
-      }
+    const order = await fetchOrder(orderId, auth.role);
+    if (!order) {
+      return jsonError('Not found', 404);
     }
 
-    const order = fetchOrder(db, orderId, auth.role);
-    if (!order) {
+    if (
+      (auth.role === 'PLANCHA' || auth.role === 'FREIDORA') &&
+      order.items.length === 0
+    ) {
       return jsonError('Not found', 404);
     }
 
@@ -102,18 +100,24 @@ export async function PATCH(
       return jsonError('Forbidden', 403);
     }
 
-    const db = getDb();
-    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
-    if (!order) {
+    const { data: order, error: orderError } = await supabaseAdmin
+      .from('orders')
+      .select('id')
+      .eq('id', orderId)
+      .single();
+    if (orderError || !order) {
       return jsonError('Not found', 404);
     }
 
-    db.prepare('UPDATE orders SET status = ?, updated_at = datetime(\'now\') WHERE id = ?').run(
-      status,
-      orderId
-    );
+    const { error: updateError } = await supabaseAdmin
+      .from('orders')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', orderId);
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
 
-    const updated = fetchOrder(db, orderId, auth.role);
+    const updated = await fetchOrder(orderId, auth.role);
     return NextResponse.json({ order: updated });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unauthorized';
