@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/db/connection';
 import { ensureRole, getAuthContext } from '@/lib/auth';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 
 const ITEM_STATUSES = ['EN_COLA', 'PENDIENTE', 'EN_PREPARACION', 'LISTO'] as const;
 
@@ -26,11 +26,12 @@ export async function PATCH(
       return jsonError('Invalid status');
     }
 
-    const db = getDb();
-    const item = db.prepare('SELECT * FROM order_items WHERE id = ?').get(itemId) as
-      | { id: number; station: string; order_id: number }
-      | undefined;
-    if (!item) {
+    const { data: item, error: itemError } = await supabaseAdmin
+      .from('order_items')
+      .select('id, station, order_id')
+      .eq('id', itemId)
+      .single();
+    if (itemError || !item) {
       return jsonError('Not found', 404);
     }
 
@@ -41,29 +42,44 @@ export async function PATCH(
       return jsonError('Forbidden', 403);
     }
 
-    db.prepare('UPDATE order_items SET status = ?, updated_at = datetime(\'now\') WHERE id = ?').run(
-      status,
-      itemId
-    );
+    const { error: updateError } = await supabaseAdmin
+      .from('order_items')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', itemId);
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
 
     if (status === 'LISTO') {
-      const remaining = db
-        .prepare(
-          `SELECT COUNT(*) as remaining FROM order_items
-           WHERE order_id = ? AND status != 'LISTO'`
-        )
-        .get(item.order_id) as { remaining: number };
+      const { count, error: remainingError } = await supabaseAdmin
+        .from('order_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('order_id', item.order_id)
+        .neq('status', 'LISTO');
+      if (remainingError) {
+        throw new Error(remainingError.message);
+      }
 
-      if (remaining.remaining === 0) {
-        db.prepare(
-          `UPDATE orders
-           SET status = 'LISTO_PARA_EMPACAR', updated_at = datetime('now')
-           WHERE id = ?`
-        ).run(item.order_id);
+      if (count === 0) {
+        const { error: orderUpdateError } = await supabaseAdmin
+          .from('orders')
+          .update({ status: 'LISTO_PARA_EMPACAR', updated_at: new Date().toISOString() })
+          .eq('id', item.order_id);
+        if (orderUpdateError) {
+          throw new Error(orderUpdateError.message);
+        }
       }
     }
 
-    const updated = db.prepare('SELECT * FROM order_items WHERE id = ?').get(itemId);
+    const { data: updated, error: updatedError } = await supabaseAdmin
+      .from('order_items')
+      .select('*')
+      .eq('id', itemId)
+      .single();
+    if (updatedError || !updated) {
+      throw new Error(updatedError?.message ?? 'Item not found');
+    }
+
     return NextResponse.json({ item: updated });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unauthorized';

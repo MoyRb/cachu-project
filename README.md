@@ -34,3 +34,73 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## API testing checklist (cURL)
+
+> Todos los endpoints requieren headers de desarrollo: `X-ROLE` y `X-USER-ID`.
+
+- Crear pedido (EMPAQUETADO o ADMIN):
+
+```bash
+curl -X POST http://localhost:3000/api/orders \
+  -H "Content-Type: application/json" \
+  -H "X-ROLE: EMPAQUETADO" \
+  -H "X-USER-ID: 1" \
+  -d '{
+    "type": "TAKEOUT",
+    "customer_name": "Cliente Demo",
+    "customer_phone": "5551234567",
+    "items": [
+      {
+        "product_id": 1,
+        "name_snapshot": "Hamburguesa clásica",
+        "price_cents_snapshot": 9900,
+        "qty": 1,
+        "station": "PLANCHA"
+      },
+      {
+        "product_id": 4,
+        "name_snapshot": "Papas",
+        "price_cents_snapshot": 4500,
+        "qty": 1,
+        "station": "FREIDORA"
+      }
+    ]
+  }'
+```
+
+- Listar pedidos por rol (ej. PLANCHA):
+
+```bash
+curl "http://localhost:3000/api/orders?status=RECIBIDO" \
+  -H "X-ROLE: PLANCHA" \
+  -H "X-USER-ID: 2"
+```
+
+- Actualizar item por estación (PLANCHA/FREIDORA):
+
+```bash
+curl -X PATCH http://localhost:3000/api/order-items/1 \
+  -H "Content-Type: application/json" \
+  -H "X-ROLE: PLANCHA" \
+  -H "X-USER-ID: 2" \
+  -d '{ "status": "LISTO" }'
+```
+
+- Actualizar pedido por empaquetado:
+
+```bash
+curl -X PATCH http://localhost:3000/api/orders/1 \
+  -H "Content-Type: application/json" \
+  -H "X-ROLE: EMPAQUETADO" \
+  -H "X-USER-ID: 4" \
+  -d '{ "status": "EMPACANDO" }'
+```
+
+- Verificar transición automática a `LISTO_PARA_EMPACAR`:
+
+```bash
+curl http://localhost:3000/api/orders/1 \
+  -H "X-ROLE: ADMIN" \
+  -H "X-USER-ID: 1"
+```
