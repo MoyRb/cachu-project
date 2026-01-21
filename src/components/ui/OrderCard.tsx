@@ -1,0 +1,57 @@
+import type { HTMLAttributes } from "react";
+
+import { cn } from "@/lib/utils";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+
+type OrderCardProps = HTMLAttributes<HTMLDivElement> & {
+  orderNumber: string;
+  status?: "nuevo" | "en-preparacion" | "listo" | "en-reparto" | "urgente";
+  station?: string;
+  items: string[];
+};
+
+export function OrderCard({
+  className,
+  orderNumber,
+  status = "nuevo",
+  station,
+  items,
+  ...props
+}: OrderCardProps) {
+  return (
+    <article
+      className={cn(
+        "flex flex-col gap-4 rounded-3xl border border-border bg-card/90 p-6 shadow-sm",
+        className,
+      )}
+      {...props}
+    >
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-wide text-ink/60">
+            Pedido
+          </p>
+          <p className="text-3xl font-bold text-ink">#{orderNumber}</p>
+        </div>
+        <StatusBadge status={status} />
+      </header>
+      <div className="rounded-2xl bg-cream/70 p-4">
+        <p className="text-sm font-semibold uppercase tracking-wide text-ink/60">
+          {station ?? "Estación"}
+        </p>
+        <ul className="mt-3 space-y-2 text-base font-semibold text-ink">
+          {items.map((item) => (
+            <li key={item} className="flex items-center justify-between">
+              <span>{item}</span>
+              <span className="text-sm text-ink/60">x1</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <footer className="flex items-center justify-between text-sm font-semibold text-ink/70">
+        <span>Hace 4 min</span>
+        <span>Canal: Kiosco</span>
+      </footer>
+    </article>
+  );
+}
