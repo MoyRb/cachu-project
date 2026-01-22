@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { BottomActions } from "@/components/ui/BottomActions";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/Card";
 import { TopBar } from "@/components/ui/TopBar";
-import { RoleSelector } from "@/components/kitchen/RoleSelector";
 import { useKitchenRole } from "@/hooks/useKitchenRole";
 import { useRealtimeOrders } from "@/hooks/useRealtimeOrders";
 import { formatElapsed, formatItemStatus } from "@/lib/kitchen/format";
@@ -27,9 +27,17 @@ const ITEM_ACTIONS: Record<
 };
 
 export default function PlanchaPage() {
-  const { role, setRole, userId, isDev } = useKitchenRole("PLANCHA");
+  const router = useRouter();
+  const { role, userId, hasSession, isReady, clearSession } =
+    useKitchenRole("PLANCHA");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionItemId, setActionItemId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (isReady && !hasSession) {
+      router.replace("/cocina");
+    }
+  }, [hasSession, isReady, router]);
 
   const loader = async () => {
     const response = await kitchenFetch(
@@ -102,6 +110,15 @@ export default function PlanchaPage() {
     }
   };
 
+  const handleChangeRole = () => {
+    clearSession();
+    router.push("/cocina");
+  };
+
+  if (isReady && !hasSession) {
+    return null;
+  }
+
   return (
     <main className="min-h-screen bg-cream px-6 py-8">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
@@ -113,11 +130,12 @@ export default function PlanchaPage() {
             <h1 className="text-3xl font-bold text-ink">Pedidos en plancha</h1>
           </div>
           <div className="flex flex-wrap items-center gap-4">
-            <RoleSelector
-              role={role}
-              onChange={setRole}
-              isVisible={isDev}
-            />
+            <span className="rounded-full border border-border bg-cream px-4 py-2 text-sm font-semibold text-ink">
+              Rol: {role}
+            </span>
+            <Button size="lg" variant="secondary" onClick={handleChangeRole}>
+              Cambiar rol
+            </Button>
             <Button size="lg" variant="secondary" onClick={refresh}>
               Actualizar
             </Button>

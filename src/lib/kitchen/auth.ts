@@ -7,16 +7,16 @@ export const kitchenRoles: KitchenRole[] = [
   "ADMIN",
 ];
 
-const ROLE_STORAGE_KEY = "cachu-kitchen-role";
-const USER_ID_STORAGE_KEY = "cachu-kitchen-user-id";
+const ROLE_STORAGE_KEY = "cachu_role";
+const USER_ID_STORAGE_KEY = "cachu_user_id";
 
 export function isKitchenDev() {
   return process.env.NODE_ENV !== "production";
 }
 
-export function getStoredKitchenRole(defaultRole: KitchenRole) {
+export function getStoredKitchenRole() {
   if (typeof window === "undefined") {
-    return defaultRole;
+    return null;
   }
 
   const stored = window.localStorage.getItem(ROLE_STORAGE_KEY);
@@ -24,12 +24,12 @@ export function getStoredKitchenRole(defaultRole: KitchenRole) {
     return stored as KitchenRole;
   }
 
-  return defaultRole;
+  return null;
 }
 
-export function getStoredKitchenUserId(defaultUserId = 1) {
+export function getStoredKitchenUserId() {
   if (typeof window === "undefined") {
-    return defaultUserId;
+    return null;
   }
 
   const stored = window.localStorage.getItem(USER_ID_STORAGE_KEY);
@@ -38,7 +38,7 @@ export function getStoredKitchenUserId(defaultUserId = 1) {
     return parsed;
   }
 
-  return defaultUserId;
+  return null;
 }
 
 export function persistKitchenRole(role: KitchenRole) {
@@ -55,6 +55,26 @@ export function persistKitchenUserId(userId: number) {
   }
 
   window.localStorage.setItem(USER_ID_STORAGE_KEY, String(userId));
+}
+
+export function clearKitchenSession() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(ROLE_STORAGE_KEY);
+  window.localStorage.removeItem(USER_ID_STORAGE_KEY);
+}
+
+export function getStoredKitchenSession() {
+  const role = getStoredKitchenRole();
+  const userId = getStoredKitchenUserId();
+
+  if (role && userId) {
+    return { role, userId };
+  }
+
+  return null;
 }
 
 export function buildKitchenHeaders(role: KitchenRole, userId: number) {
