@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { Badge } from "@/components/ui/Badge";
 import { BottomActions } from "@/components/ui/BottomActions";
 import { Button } from "@/components/ui/Button";
@@ -28,6 +30,12 @@ export default function UIKitPage() {
             <Button variant="ghost" size="lg">
               Ayuda
             </Button>
+            <Link
+              href="/kiosco"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-cta px-6 text-lg font-semibold text-ink shadow-sm transition-colors hover:bg-[#d88b46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-wood/60 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+            >
+              Ir a Kiosco
+            </Link>
           </div>
         </TopBar>
 
