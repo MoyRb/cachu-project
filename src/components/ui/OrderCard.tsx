@@ -8,6 +8,8 @@ type OrderCardProps = HTMLAttributes<HTMLDivElement> & {
   status?: "nuevo" | "en-preparacion" | "listo" | "en-reparto" | "urgente";
   station?: string;
   items: string[];
+  timeLabel?: string;
+  channelLabel?: string;
 };
 
 export function OrderCard({
@@ -16,6 +18,8 @@ export function OrderCard({
   status = "nuevo",
   station,
   items,
+  timeLabel = "Hace 4 min",
+  channelLabel = "Canal: Kiosco",
   ...props
 }: OrderCardProps) {
   return (
@@ -49,8 +53,8 @@ export function OrderCard({
         </ul>
       </div>
       <footer className="flex items-center justify-between text-sm font-semibold text-ink/70">
-        <span>Hace 4 min</span>
-        <span>Canal: Kiosco</span>
+        <span>{timeLabel}</span>
+        <span>{channelLabel}</span>
       </footer>
     </article>
   );
