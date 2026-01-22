@@ -8,6 +8,9 @@ type ProductCardProps = HTMLAttributes<HTMLDivElement> & {
   description: string;
   price: string;
   tag?: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  actionDisabled?: boolean;
 };
 
 export function ProductCard({
@@ -16,6 +19,9 @@ export function ProductCard({
   description,
   price,
   tag,
+  actionLabel = "Agregar",
+  onAction,
+  actionDisabled = false,
   ...props
 }: ProductCardProps) {
   return (
@@ -39,7 +45,14 @@ export function ProductCard({
       </header>
       <div className="flex items-center justify-between">
         <p className="text-2xl font-bold text-ink">{price}</p>
-        <Button size="md">Agregar</Button>
+        <Button
+          size="md"
+          onClick={onAction}
+          disabled={actionDisabled}
+          type="button"
+        >
+          {actionLabel}
+        </Button>
       </div>
     </article>
   );

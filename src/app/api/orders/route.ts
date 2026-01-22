@@ -103,13 +103,23 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = getAuthContext(request);
-    ensureRole(auth.role, ['ADMIN', 'EMPAQUETADO']);
+    let auth: { role: Role } | null = null;
+    try {
+      auth = getAuthContext(request);
+    } catch {
+      auth = null;
+    }
+    if (auth) {
+      ensureRole(auth.role, ['ADMIN', 'EMPAQUETADO']);
+    }
 
     const payload = await request.json();
     const { type, customer_name, customer_phone, address_json, notes, items, delivery_fee_cents } = payload ?? {};
 
     if (!ORDER_TYPES.includes(type)) {
+      return jsonError('Invalid order type');
+    }
+    if (!auth && type === 'DELIVERY') {
       return jsonError('Invalid order type');
     }
     if (!Array.isArray(items) || items.length === 0) {
