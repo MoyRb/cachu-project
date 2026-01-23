@@ -14,6 +14,7 @@ type UseOrdersPollingOptions<T> = {
   intervalMs?: number;
   enabled?: boolean;
   fetcher: OrdersPollingFetcher<T>;
+  signature?: (data: T) => string;
 };
 
 export function useOrdersPolling<T>({
@@ -22,15 +23,17 @@ export function useOrdersPolling<T>({
   intervalMs = 5000,
   enabled = true,
   fetcher,
+  signature,
 }: UseOrdersPollingOptions<T>) {
   const [data, setData] = useState<T | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [lastChangedAt, setLastChangedAt] = useState<Date | null>(null);
   const isFetchingRef = useRef(false);
   const mountedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const intervalRef = useRef<number | null>(null);
+  const signatureRef = useRef<string | null>(null);
 
   const runFetch = useCallback(async () => {
     if (!enabled || isFetchingRef.current) {
@@ -38,7 +41,7 @@ export function useOrdersPolling<T>({
     }
 
     isFetchingRef.current = true;
-    setIsLoading(true);
+    setIsRefreshing(true);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -48,9 +51,15 @@ export function useOrdersPolling<T>({
       if (!mountedRef.current) {
         return;
       }
-      setData(next);
-      setError(null);
-      setLastUpdated(new Date());
+      const nextSignature = signature ? signature(next) : JSON.stringify(next);
+      if (signatureRef.current !== nextSignature) {
+        signatureRef.current = nextSignature;
+        setData(next);
+        setLastChangedAt(new Date());
+      }
+      if (error !== null) {
+        setError(null);
+      }
     } catch (fetchError) {
       if (controller.signal.aborted || !mountedRef.current) {
         return;
@@ -62,11 +71,11 @@ export function useOrdersPolling<T>({
       );
     } finally {
       if (mountedRef.current) {
-        setIsLoading(false);
+        setIsRefreshing(false);
       }
       isFetchingRef.current = false;
     }
-  }, [enabled, fetcher, role, userId]);
+  }, [enabled, fetcher, role, signature, userId, error]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -99,5 +108,11 @@ export function useOrdersPolling<T>({
     };
   }, [enabled, intervalMs, runFetch]);
 
-  return { data, isLoading, error, lastUpdated, refresh: runFetch };
+  return {
+    data,
+    isRefreshing,
+    error,
+    lastChangedAt,
+    refreshNow: runFetch,
+  };
 }

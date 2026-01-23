@@ -8,8 +8,7 @@ type EmptyStateProps = {
   title: string;
   subtitle?: string;
   hint?: string;
-  lastUpdated?: string;
-  isRefreshing?: boolean;
+  lastUpdated?: ReactNode;
   onRefresh?: () => void;
   icon?: ReactNode;
   className?: string;
@@ -20,7 +19,6 @@ export function EmptyState({
   subtitle,
   hint,
   lastUpdated,
-  isRefreshing = false,
   onRefresh,
   icon,
   className,
@@ -46,8 +44,7 @@ export function EmptyState({
       </Button>
       <div className="space-y-1 text-sm text-ink/60">
         {hint ? <p>{hint}</p> : null}
-        {lastUpdated ? <p>{lastUpdated}</p> : null}
-        {isRefreshing ? <p className="text-ink/80">Actualizando...</p> : null}
+        {lastUpdated ? <p className="tabular-nums">{lastUpdated}</p> : null}
       </div>
     </Card>
   );

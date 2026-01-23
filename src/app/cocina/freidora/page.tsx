@@ -21,6 +21,34 @@ const formatLastUpdated = (date: Date) =>
     minute: "2-digit",
     second: "2-digit",
   })}`;
+const getVisibleOrders = (orders: Order[]) => {
+  return orders
+    .map((order) => ({
+      ...order,
+      items: order.items.filter((item) => item.station === STATION),
+    }))
+    .filter((order) => order.items.length > 0)
+    .sort(
+      (left, right) =>
+        new Date(left.created_at).getTime() -
+        new Date(right.created_at).getTime(),
+    );
+};
+const getOrdersSignature = (orders: Order[]) =>
+  JSON.stringify(
+    getVisibleOrders(orders).map((order) => ({
+      id: order.id,
+      status: order.status,
+      updated_at: order.updated_at,
+      items: order.items
+        .map((item) => ({
+          id: item.id,
+          status: item.status,
+          updated_at: item.updated_at,
+        }))
+        .sort((left, right) => left.id - right.id),
+    })),
+  );
 
 const ITEM_ACTIONS: Record<
   ItemStatus,
@@ -69,28 +97,18 @@ export default function FreidoraPage() {
     return payload?.orders ?? [];
   };
 
-  const { data, isLoading, error, refresh, lastUpdated } =
+  const { data, isRefreshing, error, refreshNow, lastChangedAt } =
     useOrdersPolling<Order[]>({
       role,
       userId,
       intervalMs: 5000,
       enabled: true,
       fetcher: loader,
+      signature: getOrdersSignature,
     });
 
   const orders = useMemo(() => {
-    const list = (data ?? []).map((order) => ({
-      ...order,
-      items: order.items.filter((item) => item.station === STATION),
-    }));
-
-    return list
-      .filter((order) => order.items.length > 0)
-      .sort(
-        (left, right) =>
-          new Date(left.created_at).getTime() -
-          new Date(right.created_at).getTime(),
-      );
+    return getVisibleOrders(data ?? []);
   }, [data]);
 
   const handleStatusChange = async (
@@ -116,7 +134,7 @@ export default function FreidoraPage() {
       if (!response.ok) {
         throw new Error(payload?.error ?? "No se pudo actualizar el ítem.");
       }
-      await refresh();
+      await refreshNow();
     } catch (updateError) {
       setActionError(
         updateError instanceof Error
@@ -160,9 +178,20 @@ export default function FreidoraPage() {
             <Button size="lg" variant="secondary" onClick={handleChangeRole}>
               Cambiar rol
             </Button>
-            <Button size="lg" variant="secondary" onClick={refresh}>
+            <Button size="lg" variant="secondary" onClick={refreshNow}>
               Actualizar
             </Button>
+            <div className="flex min-w-[140px] items-center justify-end text-xs font-semibold text-ink/60">
+              <span
+                className={cn(
+                  "transition-opacity",
+                  isRefreshing ? "opacity-100" : "opacity-0",
+                )}
+                aria-live="polite"
+              >
+                Sincronizando...
+              </span>
+            </div>
           </div>
         </TopBar>
 
@@ -174,12 +203,11 @@ export default function FreidoraPage() {
                 subtitle={emptySubtitle}
                 hint="Actualiza cada 5s."
                 lastUpdated={
-                  lastUpdated
-                    ? formatLastUpdated(lastUpdated)
+                  lastChangedAt
+                    ? formatLastUpdated(lastChangedAt)
                     : "Última actualización: --"
                 }
-                isRefreshing={isLoading}
-                onRefresh={refresh}
+                onRefresh={refreshNow}
                 icon="🍟"
               />
             </div>
