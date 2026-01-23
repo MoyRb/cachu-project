@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { BottomActions } from "@/components/ui/BottomActions";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { TopBar } from "@/components/ui/TopBar";
 import { useKitchenRole } from "@/hooks/useKitchenRole";
 import { useRealtimeOrders } from "@/hooks/useRealtimeOrders";
@@ -15,6 +15,12 @@ import type { ItemStatus, Order } from "@/lib/kitchen/types";
 import { cn } from "@/lib/utils";
 
 const STATION = "PLANCHA" as const;
+const formatLastUpdated = (date: Date) =>
+  `Última actualización: ${date.toLocaleTimeString("es-CL", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  })}`;
 
 const ITEM_ACTIONS: Record<
   ItemStatus,
@@ -32,6 +38,7 @@ export default function PlanchaPage() {
     useKitchenRole("PLANCHA");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionItemId, setActionItemId] = useState<number | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string>("");
 
   useEffect(() => {
     if (isReady && !hasSession) {
@@ -59,6 +66,12 @@ export default function PlanchaPage() {
     loader,
     { intervalMs: 4000, enabled: true },
   );
+
+  useEffect(() => {
+    if (!isLoading && !error) {
+      setLastUpdated(formatLastUpdated(new Date()));
+    }
+  }, [data, error, isLoading]);
 
   const orders = useMemo(() => {
     const list = (data ?? []).map((order) => ({
@@ -119,6 +132,12 @@ export default function PlanchaPage() {
     return null;
   }
 
+  const isEmpty = orders.length === 0;
+  const emptyTitle = error ? "Sin conexión" : "Sin pedidos en plancha";
+  const emptySubtitle = error
+    ? error
+    : "Todo listo por aquí. Los nuevos pedidos aparecerán automáticamente.";
+
   return (
     <main className="min-h-screen bg-cream px-6 py-8">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
@@ -143,124 +162,113 @@ export default function PlanchaPage() {
         </TopBar>
 
         <section className="space-y-6">
-          {error ? (
-            <Card className="border-2 border-wood/40 bg-cream">
-              <CardTitle>Sin conexión</CardTitle>
-              <CardDescription className="mt-2 text-base">
-                {error}
-              </CardDescription>
-            </Card>
-          ) : null}
-          {actionError ? (
-            <Card className="border-2 border-wood/40 bg-cream">
-              <CardTitle>No se pudo actualizar</CardTitle>
-              <CardDescription className="mt-2 text-base">
-                {actionError}
-              </CardDescription>
-            </Card>
-          ) : null}
+          {isEmpty ? (
+            <div className="flex min-h-[60vh] items-center justify-center">
+              <EmptyState
+                title={emptyTitle}
+                subtitle={emptySubtitle}
+                hint="Actualiza cada 4s."
+                lastUpdated={lastUpdated || "Última actualización: --"}
+                isRefreshing={isLoading}
+                onRefresh={refresh}
+                icon="🍳"
+              />
+            </div>
+          ) : (
+            <>
+              {error ? (
+                <Card className="border-2 border-wood/40 bg-cream">
+                  <CardTitle>Sin conexión</CardTitle>
+                  <CardDescription className="mt-2 text-base">
+                    {error}
+                  </CardDescription>
+                </Card>
+              ) : null}
+              {actionError ? (
+                <Card className="border-2 border-wood/40 bg-cream">
+                  <CardTitle>No se pudo actualizar</CardTitle>
+                  <CardDescription className="mt-2 text-base">
+                    {actionError}
+                  </CardDescription>
+                </Card>
+              ) : null}
 
-          {isLoading && orders.length === 0 ? (
-            <Card>
-              <CardTitle>Cargando pedidos...</CardTitle>
-              <CardDescription className="mt-2 text-base">
-                Actualizando lista de plancha.
-              </CardDescription>
-            </Card>
-          ) : null}
-
-          {orders.length === 0 && !isLoading ? (
-            <Card>
-              <CardTitle>Sin pedidos en plancha</CardTitle>
-              <CardDescription className="mt-2 text-base">
-                Todo listo por aquí. Los nuevos pedidos aparecerán
-                automáticamente.
-              </CardDescription>
-            </Card>
-          ) : null}
-
-          {orders.map((order) => (
-            <Card
-              key={order.id}
-              className={cn(
-                "border-2",
-                Date.now() - new Date(order.created_at).getTime() < 5 * 60000
-                  ? "border-cta/80"
-                  : "border-border",
-              )}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-wide text-ink/60">
-                    Pedido
-                  </p>
-                  <p className="text-4xl font-bold text-ink">
-                    #{order.order_number}
-                  </p>
-                </div>
-                <div className="text-right text-base font-semibold text-ink/70">
-                  <p>{formatElapsed(order.created_at)}</p>
-                  <p className="uppercase tracking-wide">{order.type}</p>
-                </div>
-              </div>
-
-              <div className="mt-6 space-y-4">
-                {order.items.map((item) => {
-                  const action = ITEM_ACTIONS[item.status];
-                  return (
-                    <div
-                      key={item.id}
-                      className="rounded-2xl border border-border bg-cream/80 p-4"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div>
-                          <p className="text-2xl font-semibold text-ink">
-                            {item.name_snapshot}
-                          </p>
-                          <p className="text-base font-semibold text-ink/60">
-                            {formatItemStatus(item.status)} · x{item.qty}
-                          </p>
-                          {item.notes ? (
-                            <p className="mt-2 text-base text-ink/70">
-                              Nota: {item.notes}
-                            </p>
-                          ) : null}
-                        </div>
-                        {action ? (
-                          <Button
-                            size="xl"
-                            onClick={() =>
-                              handleStatusChange(item.id, action.nextStatus)
-                            }
-                            disabled={actionItemId === item.id}
-                          >
-                            {action.label}
-                          </Button>
-                        ) : (
-                          <span className="rounded-full bg-success px-4 py-2 text-base font-semibold text-ink">
-                            {item.status === "LISTO" ? "Listo" : "En cola"}
-                          </span>
-                        )}
-                      </div>
+              {orders.map((order) => (
+                <Card
+                  key={order.id}
+                  className={cn(
+                    "border-2",
+                    Date.now() - new Date(order.created_at).getTime() <
+                      5 * 60000
+                      ? "border-cta/80"
+                      : "border-border",
+                  )}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-semibold uppercase tracking-wide text-ink/60">
+                        Pedido
+                      </p>
+                      <p className="text-4xl font-bold text-ink">
+                        #{order.order_number}
+                      </p>
                     </div>
-                  );
-                })}
-              </div>
-            </Card>
-          ))}
-        </section>
+                    <div className="text-right text-base font-semibold text-ink/70">
+                      <p>{formatElapsed(order.created_at)}</p>
+                      <p className="uppercase tracking-wide">{order.type}</p>
+                    </div>
+                  </div>
 
-        <BottomActions className="gap-4">
-          <div>
-            <p className="text-base font-semibold text-ink">Modo plancha</p>
-            <p className="text-sm text-ink/60">
-              Actualización automática cada 4 segundos.
-            </p>
-          </div>
-          <Button size="lg" variant="secondary" onClick={refresh}>
-            Refrescar ahora
-          </Button>
-        </BottomActions>
+                  <div className="mt-6 space-y-4">
+                    {order.items.map((item) => {
+                      const action = ITEM_ACTIONS[item.status];
+                      return (
+                        <div
+                          key={item.id}
+                          className="rounded-2xl border border-border bg-cream/80 p-4"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-4">
+                            <div>
+                              <p className="text-2xl font-semibold text-ink">
+                                {item.name_snapshot}
+                              </p>
+                              <p className="text-base font-semibold text-ink/60">
+                                {formatItemStatus(item.status)} · x{item.qty}
+                              </p>
+                              {item.notes ? (
+                                <p className="mt-2 text-base text-ink/70">
+                                  Nota: {item.notes}
+                                </p>
+                              ) : null}
+                            </div>
+                            {action ? (
+                              <Button
+                                size="xl"
+                                onClick={() =>
+                                  handleStatusChange(
+                                    item.id,
+                                    action.nextStatus,
+                                  )
+                                }
+                                disabled={actionItemId === item.id}
+                              >
+                                {action.label}
+                              </Button>
+                            ) : (
+                              <span className="rounded-full bg-success px-4 py-2 text-base font-semibold text-ink">
+                                {item.status === "LISTO" ? "Listo" : "En cola"}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              ))}
+            </>
+          )}
+        </section>
       </div>
     </main>
   );
