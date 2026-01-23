@@ -114,15 +114,23 @@ export async function POST(request: NextRequest) {
     let auth: { role: Role } | null = null;
     try {
       auth = getAuthContext(request);
-    } catch {
-      auth = null;
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Missing authentication headers') {
+        auth = null;
+      } else {
+        throw error;
+      }
     }
 
-    if (type === 'DELIVERY') {
-      if (!auth) {
-        return jsonError('Delivery orders require admin role', 401);
-      }
+    const isKioskRequest = !auth;
+    if (isKioskRequest && type === 'DELIVERY') {
+      return jsonError('Delivery orders require admin role', 401);
+    }
+    if (!isKioskRequest && type === 'DELIVERY') {
       ensureRole(auth.role, ['ADMIN']);
+    }
+    if (isKioskRequest && !['DINEIN', 'TAKEOUT'].includes(type)) {
+      return jsonError('Invalid order type for kiosk', 401);
     }
     if (!Array.isArray(items) || items.length === 0) {
       return jsonError('Items are required');
@@ -208,7 +216,9 @@ export async function POST(request: NextRequest) {
     );
 
     if (createError) {
-      console.log('[orders] rpc error:', createError);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[orders] rpc error:', createError);
+      }
       if (process.env.NODE_ENV === 'development') {
         return NextResponse.json({ error: createError, rpcItems }, { status: 500 });
       }
@@ -246,7 +256,11 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { order: { ...order, items: orderItems ?? [] } },
+      {
+        order_id: order.id,
+        order_number: order.order_number,
+        order: { ...order, items: orderItems ?? [] }
+      },
       { status: 201 }
     );
   } catch (error) {

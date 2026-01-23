@@ -246,12 +246,18 @@ export default function KioscoPage() {
       });
       const payload = await response.json();
       if (!response.ok) {
-        throw new Error(payload?.error ?? "No se pudo crear el pedido.");
+        const errorMessage =
+          typeof payload?.error === "string"
+            ? payload.error
+            : payload?.error
+              ? JSON.stringify(payload.error)
+              : "No se pudo crear el pedido.";
+        throw new Error(errorMessage);
       }
 
       setOrderConfirmation({
-        orderNumber: payload?.order?.order_number ?? 0,
-        orderId: payload?.order?.id ?? 0,
+        orderNumber: payload?.order_number ?? 0,
+        orderId: payload?.order_id ?? 0,
         items: cartItems,
         type: orderType,
       });
