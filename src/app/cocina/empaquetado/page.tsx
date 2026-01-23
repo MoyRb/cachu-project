@@ -16,7 +16,7 @@ import {
 } from "@/lib/kitchen/format";
 import { kitchenFetch } from "@/lib/kitchen/fetch";
 import type { Order, OrderStatus } from "@/lib/kitchen/types";
-import { useOrdersPolling } from "@/lib/useOrdersPolling";
+import { useRealtimeKitchen } from "@/lib/useRealtimeKitchen";
 import { cn } from "@/lib/utils";
 
 const STATUS_PRIORITY: Record<OrderStatus, number> = {
@@ -126,15 +126,20 @@ export default function EmpaquetadoPage() {
     return payload?.orders ?? [];
   };
 
-  const { data, isRefreshing, error, refreshNow, lastChangedAt } =
-    useOrdersPolling<Order[]>({
-      role,
-      userId,
-      intervalMs: 5000,
-      enabled: true,
-      fetcher: loader,
-      signature: getOrdersSignature,
-    });
+  const {
+    data,
+    isRefreshing,
+    error,
+    refreshNow,
+    lastChangedAt,
+    realtimeStatus,
+  } = useRealtimeKitchen<Order[]>({
+    role,
+    userId,
+    enabled: true,
+    fetcher: loader,
+    signature: getOrdersSignature,
+  });
 
   const orders = useMemo(() => {
     return getSortedOrders(data ?? []);
@@ -211,7 +216,7 @@ export default function EmpaquetadoPage() {
             <Button size="lg" variant="secondary" onClick={refreshNow}>
               Actualizar
             </Button>
-            <div className="flex min-w-[140px] items-center justify-end text-xs font-semibold text-ink/60">
+            <div className="flex min-w-[200px] items-center justify-end gap-2 text-xs font-semibold text-ink/60">
               <span
                 className={cn(
                   "transition-opacity",
@@ -220,6 +225,9 @@ export default function EmpaquetadoPage() {
                 aria-live="polite"
               >
                 Sincronizando...
+              </span>
+              <span className="rounded-full border border-border bg-cream px-3 py-1 text-[11px] font-semibold text-ink/70">
+                {realtimeStatus === "connected" ? "En vivo" : "Modo respaldo"}
               </span>
             </div>
           </div>
@@ -231,7 +239,7 @@ export default function EmpaquetadoPage() {
               <EmptyState
                 title={emptyTitle}
                 subtitle={emptySubtitle}
-                hint="Actualiza cada 5s."
+                hint="Actualiza en vivo (respaldo cada 60s)."
                 lastUpdated={
                   lastChangedAt
                     ? formatLastUpdated(lastChangedAt)
