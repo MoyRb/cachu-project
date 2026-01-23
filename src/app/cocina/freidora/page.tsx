@@ -8,10 +8,10 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TopBar } from "@/components/ui/TopBar";
 import { useKitchenRole } from "@/hooks/useKitchenRole";
-import { useRealtimeOrders } from "@/hooks/useRealtimeOrders";
 import { formatElapsed, formatItemStatus } from "@/lib/kitchen/format";
 import { kitchenFetch } from "@/lib/kitchen/fetch";
 import type { ItemStatus, Order } from "@/lib/kitchen/types";
+import { useOrdersPolling } from "@/lib/useOrdersPolling";
 import { cn } from "@/lib/utils";
 
 const STATION = "FREIDORA" as const;
@@ -38,7 +38,6 @@ export default function FreidoraPage() {
     useKitchenRole("FREIDORA");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionItemId, setActionItemId] = useState<number | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<string>("");
 
   useEffect(() => {
     if (isReady && !hasSession) {
@@ -46,13 +45,21 @@ export default function FreidoraPage() {
     }
   }, [hasSession, isReady, router]);
 
-  const loader = async () => {
+  const loader = async ({
+    role: currentRole,
+    userId: currentUserId,
+    signal,
+  }: {
+    role: string;
+    userId: string;
+    signal: AbortSignal;
+  }) => {
     const response = await kitchenFetch(
       "/api/orders",
-      undefined,
+      { signal },
       {
-        role,
-        userId,
+        role: currentRole,
+        userId: currentUserId,
       },
     );
     const payload = await response.json();
@@ -62,16 +69,14 @@ export default function FreidoraPage() {
     return payload?.orders ?? [];
   };
 
-  const { data, isLoading, error, refresh } = useRealtimeOrders<Order[]>(
-    loader,
-    { intervalMs: 4000, enabled: true },
-  );
-
-  useEffect(() => {
-    if (!isLoading && !error) {
-      setLastUpdated(formatLastUpdated(new Date()));
-    }
-  }, [data, error, isLoading]);
+  const { data, isLoading, error, refresh, lastUpdated } =
+    useOrdersPolling<Order[]>({
+      role,
+      userId,
+      intervalMs: 5000,
+      enabled: true,
+      fetcher: loader,
+    });
 
   const orders = useMemo(() => {
     const list = (data ?? []).map((order) => ({
@@ -167,8 +172,12 @@ export default function FreidoraPage() {
               <EmptyState
                 title={emptyTitle}
                 subtitle={emptySubtitle}
-                hint="Actualiza cada 4s."
-                lastUpdated={lastUpdated || "Última actualización: --"}
+                hint="Actualiza cada 5s."
+                lastUpdated={
+                  lastUpdated
+                    ? formatLastUpdated(lastUpdated)
+                    : "Última actualización: --"
+                }
                 isRefreshing={isLoading}
                 onRefresh={refresh}
                 icon="🍟"
