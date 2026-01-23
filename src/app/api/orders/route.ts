@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
       return jsonError('Items are required');
     }
 
-    const normalizedItems = items.map((item: any) => {
+    const rpcItems = items.map((item: any) => {
       let productId: number | null = null;
       if (typeof item.product_id === 'number' && Number.isInteger(item.product_id)) {
         productId = item.product_id;
@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
       };
     });
 
-    for (const item of normalizedItems) {
+    for (const item of rpcItems) {
       if (!item.name_snapshot) {
         return jsonError('Item name is required');
       }
@@ -177,14 +177,19 @@ export async function POST(request: NextRequest) {
     }
 
     const deliveryFee = Number.isInteger(delivery_fee_cents) ? delivery_fee_cents : 0;
-    const subtotal = normalizedItems.reduce(
+    const subtotal = rpcItems.reduce(
       (sum: number, item: any) => sum + item.price_cents_snapshot * item.qty,
       0
     );
     const total = subtotal + deliveryFee;
 
     if (process.env.NODE_ENV === 'development') {
-      console.log('[orders] items payload:', JSON.stringify(normalizedItems));
+      console.log('[orders] items payload:', JSON.stringify(rpcItems));
+      console.log(
+        '[orders] rpcItems typeof product_id:',
+        rpcItems.map((item) => typeof item.product_id)
+      );
+      console.log('[orders] rpcItems JSON:', JSON.stringify(rpcItems));
     }
 
     const { data: orderId, error: createError } = await supabaseAdmin.rpc(
@@ -198,11 +203,15 @@ export async function POST(request: NextRequest) {
         p_subtotal_cents: subtotal,
         p_delivery_fee_cents: deliveryFee,
         p_total_cents: total,
-        p_items: normalizedItems
+        p_items: rpcItems
       }
     );
 
     if (createError) {
+      console.log('[orders] rpc error:', createError);
+      if (process.env.NODE_ENV === 'development') {
+        return NextResponse.json({ error: createError, rpcItems }, { status: 500 });
+      }
       const message = createError.message ?? 'Failed to create order';
       if (
         message.includes('create_order_with_items') ||
