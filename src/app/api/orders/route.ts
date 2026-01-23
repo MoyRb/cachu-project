@@ -128,16 +128,29 @@ export async function POST(request: NextRequest) {
       return jsonError('Items are required');
     }
 
-    const normalizedItems = items.map((item: any) => ({
-      product_id: item.product_id ?? null,
-      name_snapshot: String(item.name_snapshot ?? item.name ?? '').trim(),
-      price_cents_snapshot: Number(item.price_cents_snapshot ?? item.price_cents),
-      qty: Number(item.qty ?? 1),
-      station: item.station,
-      status: item.status ?? 'EN_COLA',
-      notes: item.notes ?? null,
-      group_id: item.group_id ?? null
-    }));
+    const normalizedItems = items.map((item: any) => {
+      let productId: number | null = null;
+      if (typeof item.product_id === 'number' && Number.isInteger(item.product_id)) {
+        productId = item.product_id;
+      } else if (typeof item.product_id === 'string') {
+        const trimmed = item.product_id.trim();
+        const parsed = trimmed === '' ? NaN : Number(trimmed);
+        if (Number.isInteger(parsed)) {
+          productId = parsed;
+        }
+      }
+
+      return {
+        product_id: productId,
+        name_snapshot: String(item.name_snapshot ?? item.name ?? '').trim(),
+        price_cents_snapshot: Number(item.price_cents_snapshot ?? item.price_cents),
+        qty: Number(item.qty ?? 1),
+        station: item.station,
+        status: item.status ?? 'EN_COLA',
+        notes: item.notes ?? null,
+        group_id: item.group_id ?? null
+      };
+    });
 
     for (const item of normalizedItems) {
       if (!item.name_snapshot) {
