@@ -235,6 +235,7 @@ export default function KioscoPage() {
           customer_phone: null,
           notes: orderNotes.trim() || null,
           items: cartItems.map((item) => ({
+            product_id: item.id,
             name_snapshot: item.name,
             price_cents_snapshot: item.price_cents,
             qty: item.qty,
