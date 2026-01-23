@@ -126,27 +126,26 @@ export async function POST(request: NextRequest) {
       return jsonError('Invalid order type');
     }
 
-    let auth: { role: Role } | null = null;
-    try {
-      auth = getAuthContext(request);
-    } catch (error) {
-      if (error instanceof Error && error.message === 'Missing authentication headers') {
-        auth = null;
-      } else {
-        throw error;
-      }
-    }
+    const roleHeader = request.headers.get('x-role')?.trim();
+    const userIdHeader = request.headers.get('x-user-id')?.trim();
+    const isKioskRequest = !roleHeader || !userIdHeader;
+    console.log('[orders] mode:', isKioskRequest ? 'KIOSCO' : 'STAFF');
 
-    const isKioskRequest = !auth;
     if (isKioskRequest && type === 'DELIVERY') {
       return jsonError('Delivery orders require admin role', 401);
-    }
-    if (!isKioskRequest && type === 'DELIVERY') {
-      ensureRole(auth.role, ['ADMIN']);
     }
     if (isKioskRequest && !['DINEIN', 'TAKEOUT'].includes(type)) {
       return jsonError('Invalid order type for kiosk', 401);
     }
+
+    let auth: { role: Role } | null = null;
+    if (!isKioskRequest) {
+      auth = getAuthContext(request);
+      if (type === 'DELIVERY') {
+        ensureRole(auth.role, ['ADMIN']);
+      }
+    }
+
     if (!Array.isArray(items) || items.length === 0) {
       return jsonError('Items are required');
     }
@@ -253,6 +252,25 @@ export async function POST(request: NextRequest) {
       throw new Error('Failed to create order');
     }
 
+    if (isKioskRequest) {
+      const { data: kioskOrder, error: kioskOrderError } = await supabaseAdmin
+        .from('orders')
+        .select('id, order_number')
+        .eq('id', orderId)
+        .single();
+      if (kioskOrderError || !kioskOrder) {
+        throw new Error(kioskOrderError?.message ?? 'Order not found');
+      }
+
+      return NextResponse.json(
+        {
+          order_id: String(kioskOrder.id),
+          order_number: Number(kioskOrder.order_number)
+        },
+        { status: 200 }
+      );
+    }
+
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
       .select('*')
@@ -287,7 +305,12 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unauthorized';
-    const status = message === 'Forbidden' ? 403 : message === 'Unauthorized' ? 401 : 500;
+    const status =
+      message === 'Forbidden'
+        ? 403
+        : message === 'Unauthorized' || message === 'Missing authentication headers'
+          ? 401
+          : 500;
     return jsonError(message, status);
   }
 }
