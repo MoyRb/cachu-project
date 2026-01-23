@@ -19,6 +19,21 @@ function jsonError(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
 }
 
+function toJsonSafe(value: unknown): unknown {
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => toJsonSafe(item));
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, val]) => [key, toJsonSafe(val)])
+    );
+  }
+  return value;
+}
+
 async function fetchOrders(
   role: Role,
   station: string | null,
@@ -220,7 +235,7 @@ export async function POST(request: NextRequest) {
         console.log('[orders] rpc error:', createError);
       }
       if (process.env.NODE_ENV === 'development') {
-        return NextResponse.json({ error: createError, rpcItems }, { status: 500 });
+        return NextResponse.json(toJsonSafe({ error: createError, rpcItems }), { status: 500 });
       }
       const message = createError.message ?? 'Failed to create order';
       if (
@@ -255,12 +270,19 @@ export async function POST(request: NextRequest) {
       throw new Error(itemsError.message);
     }
 
+    const normalizedOrder = {
+      ...order,
+      id: String(order.id),
+      order_number: Number(order.order_number),
+      items: (orderItems ?? []).map((item) => toJsonSafe(item))
+    };
+
     return NextResponse.json(
-      {
-        order_id: order.id,
-        order_number: order.order_number,
-        order: { ...order, items: orderItems ?? [] }
-      },
+      toJsonSafe({
+        order_id: String(order.id),
+        order_number: Number(order.order_number),
+        order: normalizedOrder
+      }),
       { status: 201 }
     );
   } catch (error) {

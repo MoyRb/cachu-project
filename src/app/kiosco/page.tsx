@@ -68,7 +68,7 @@ export default function KioscoPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [orderConfirmation, setOrderConfirmation] = useState<{
     orderNumber: number;
-    orderId: number;
+    orderId: string;
     items: CartItem[];
     type: OrderType;
   } | null>(null);
@@ -257,7 +257,7 @@ export default function KioscoPage() {
 
       setOrderConfirmation({
         orderNumber: payload?.order_number ?? 0,
-        orderId: payload?.order_id ?? 0,
+        orderId: String(payload?.order_id ?? ""),
         items: cartItems,
         type: orderType,
       });
@@ -366,10 +366,11 @@ export default function KioscoPage() {
           <Card className="space-y-6 text-center">
             <div className="space-y-3">
               <p className="text-lg font-semibold text-ink/70">
-                Número de pedido
+                Pedido #
+                {String(orderConfirmation.orderNumber).padStart(3, "0")}
               </p>
               <p className="text-6xl font-bold text-ink">
-                #{String(orderConfirmation.orderNumber).padStart(3, "0")}
+                {String(orderConfirmation.orderNumber).padStart(3, "0")}
               </p>
               <p className="text-base text-ink/70">
                 {typeLabels[orderConfirmation.type]}
