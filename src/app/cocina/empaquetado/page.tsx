@@ -34,6 +34,35 @@ const formatLastUpdated = (date: Date) =>
     minute: "2-digit",
     second: "2-digit",
   })}`;
+const getSortedOrders = (orders: Order[]) => {
+  return orders.slice().sort((left, right) => {
+    const priority =
+      (STATUS_PRIORITY[left.status] ?? 99) -
+      (STATUS_PRIORITY[right.status] ?? 99);
+    if (priority !== 0) {
+      return priority;
+    }
+    return (
+      new Date(left.created_at).getTime() -
+      new Date(right.created_at).getTime()
+    );
+  });
+};
+const getOrdersSignature = (orders: Order[]) =>
+  JSON.stringify(
+    getSortedOrders(orders).map((order) => ({
+      id: order.id,
+      status: order.status,
+      updated_at: order.updated_at,
+      items: order.items
+        .map((item) => ({
+          id: item.id,
+          status: item.status,
+          updated_at: item.updated_at,
+        }))
+        .sort((left, right) => left.id - right.id),
+    })),
+  );
 
 type OrderAction = { label: string; nextStatus: OrderStatus };
 
@@ -97,28 +126,18 @@ export default function EmpaquetadoPage() {
     return payload?.orders ?? [];
   };
 
-  const { data, isLoading, error, refresh, lastUpdated } =
+  const { data, isRefreshing, error, refreshNow, lastChangedAt } =
     useOrdersPolling<Order[]>({
       role,
       userId,
       intervalMs: 5000,
       enabled: true,
       fetcher: loader,
+      signature: getOrdersSignature,
     });
 
   const orders = useMemo(() => {
-    return (data ?? []).slice().sort((left, right) => {
-      const priority =
-        (STATUS_PRIORITY[left.status] ?? 99) -
-        (STATUS_PRIORITY[right.status] ?? 99);
-      if (priority !== 0) {
-        return priority;
-      }
-      return (
-        new Date(left.created_at).getTime() -
-        new Date(right.created_at).getTime()
-      );
-    });
+    return getSortedOrders(data ?? []);
   }, [data]);
 
   const handleStatusChange = async (orderId: number, status: OrderStatus) => {
@@ -141,7 +160,7 @@ export default function EmpaquetadoPage() {
       if (!response.ok) {
         throw new Error(payload?.error ?? "No se pudo actualizar el pedido.");
       }
-      await refresh();
+      await refreshNow();
     } catch (updateError) {
       setActionError(
         updateError instanceof Error
@@ -189,9 +208,20 @@ export default function EmpaquetadoPage() {
             <Button size="lg" variant="secondary" onClick={handleChangeRole}>
               Cambiar rol
             </Button>
-            <Button size="lg" variant="secondary" onClick={refresh}>
+            <Button size="lg" variant="secondary" onClick={refreshNow}>
               Actualizar
             </Button>
+            <div className="flex min-w-[140px] items-center justify-end text-xs font-semibold text-ink/60">
+              <span
+                className={cn(
+                  "transition-opacity",
+                  isRefreshing ? "opacity-100" : "opacity-0",
+                )}
+                aria-live="polite"
+              >
+                Sincronizando...
+              </span>
+            </div>
           </div>
         </TopBar>
 
@@ -203,12 +233,11 @@ export default function EmpaquetadoPage() {
                 subtitle={emptySubtitle}
                 hint="Actualiza cada 5s."
                 lastUpdated={
-                  lastUpdated
-                    ? formatLastUpdated(lastUpdated)
+                  lastChangedAt
+                    ? formatLastUpdated(lastChangedAt)
                     : "Última actualización: --"
                 }
-                isRefreshing={isLoading}
-                onRefresh={refresh}
+                onRefresh={refreshNow}
                 icon="📦"
               />
             </div>
