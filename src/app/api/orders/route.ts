@@ -103,24 +103,26 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const payload = await request.json();
+    const { type, customer_name, customer_phone, address_json, notes, items, delivery_fee_cents } =
+      payload ?? {};
+
+    if (!ORDER_TYPES.includes(type)) {
+      return jsonError('Invalid order type');
+    }
+
     let auth: { role: Role } | null = null;
     try {
       auth = getAuthContext(request);
     } catch {
       auth = null;
     }
-    if (auth) {
-      ensureRole(auth.role, ['ADMIN', 'EMPAQUETADO']);
-    }
 
-    const payload = await request.json();
-    const { type, customer_name, customer_phone, address_json, notes, items, delivery_fee_cents } = payload ?? {};
-
-    if (!ORDER_TYPES.includes(type)) {
-      return jsonError('Invalid order type');
-    }
-    if (!auth && type === 'DELIVERY') {
-      return jsonError('Invalid order type');
+    if (type === 'DELIVERY') {
+      if (!auth) {
+        return jsonError('Delivery orders require admin role', 401);
+      }
+      ensureRole(auth.role, ['ADMIN']);
     }
     if (!Array.isArray(items) || items.length === 0) {
       return jsonError('Items are required');
@@ -177,8 +179,21 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    if (createError || !orderId) {
-      throw new Error(createError?.message ?? 'Failed to create order');
+    if (createError) {
+      const message = createError.message ?? 'Failed to create order';
+      if (
+        message.includes('create_order_with_items') ||
+        message.includes('does not exist')
+      ) {
+        return jsonError(
+          'RPC create_order_with_items is missing. Create it in Supabase SQL editor.',
+          500
+        );
+      }
+      throw new Error(message);
+    }
+    if (!orderId) {
+      throw new Error('Failed to create order');
     }
 
     const { data: order, error: orderError } = await supabaseAdmin
@@ -204,7 +219,7 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unauthorized';
-    const status = message === 'Forbidden' ? 403 : 401;
+    const status = message === 'Forbidden' ? 403 : message === 'Unauthorized' ? 401 : 500;
     return jsonError(message, status);
   }
 }

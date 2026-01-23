@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { BottomActions } from "@/components/ui/BottomActions";
@@ -49,6 +50,11 @@ const formatCurrency = (valueCents: number) =>
     currency: "MXN",
     maximumFractionDigits: 0,
   }).format(valueCents / 100);
+
+const topBarLinkBase =
+  "inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-wood/60 focus-visible:ring-offset-2 focus-visible:ring-offset-cream";
+const topBarPrimaryLink = `${topBarLinkBase} h-12 px-6 text-lg bg-cta text-ink shadow-sm hover:bg-[#d88b46]`;
+const topBarSecondaryLink = `${topBarLinkBase} h-10 px-4 text-sm border border-wood/70 text-ink hover:bg-accent/60`;
 
 export default function KioscoPage() {
   const [orderType, setOrderType] = useState<OrderType | null>(null);
@@ -280,7 +286,15 @@ export default function KioscoPage() {
               </p>
               <h1 className="text-4xl font-bold text-ink">Nuevo pedido</h1>
             </div>
-            <StatusBadge status="nuevo" />
+            <div className="flex flex-wrap items-center gap-3">
+              <Link href="/cocina" className={topBarPrimaryLink}>
+                Cocina
+              </Link>
+              <Link href="/ui-kit" className={topBarSecondaryLink}>
+                UI Kit
+              </Link>
+              <StatusBadge status="nuevo" />
+            </div>
           </TopBar>
 
           <Card className="space-y-4">
@@ -331,7 +345,15 @@ export default function KioscoPage() {
                 ¡Gracias por tu compra!
               </h1>
             </div>
-            <StatusBadge status="listo" />
+            <div className="flex flex-wrap items-center gap-3">
+              <Link href="/cocina" className={topBarPrimaryLink}>
+                Cocina
+              </Link>
+              <Link href="/ui-kit" className={topBarSecondaryLink}>
+                UI Kit
+              </Link>
+              <StatusBadge status="listo" />
+            </div>
           </TopBar>
 
           <Card className="space-y-6 text-center">
@@ -397,7 +419,13 @@ export default function KioscoPage() {
               {orderType ? typeLabels[orderType] : ""}
             </p>
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <Link href="/cocina" className={topBarPrimaryLink}>
+              Cocina
+            </Link>
+            <Link href="/ui-kit" className={topBarSecondaryLink}>
+              UI Kit
+            </Link>
             <Button
               size="lg"
               variant="secondary"
