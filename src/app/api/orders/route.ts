@@ -214,7 +214,7 @@ export async function POST(request: NextRequest) {
       console.log('[orders] rpcItems JSON:', JSON.stringify(rpcItems));
     }
 
-    const { data: orderId, error: createError } = await supabaseAdmin.rpc(
+    const { data, error: createError } = await supabaseAdmin.rpc(
       'create_order_with_items',
       {
         p_type: type,
@@ -248,24 +248,26 @@ export async function POST(request: NextRequest) {
       }
       throw new Error(message);
     }
+    const rpcRow = Array.isArray(data) ? data[0] : data;
+    const orderId = rpcRow?.order_id;
+    const orderNumber = rpcRow?.order_number;
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[orders] rpcRow:', rpcRow, 'orderId typeof:', typeof orderId);
+    }
+
+    if (typeof orderId !== 'string' && typeof orderId !== 'number') {
+      throw new Error('Failed to create order');
+    }
     if (!orderId) {
       throw new Error('Failed to create order');
     }
 
     if (isKioskRequest) {
-      const { data: kioskOrder, error: kioskOrderError } = await supabaseAdmin
-        .from('orders')
-        .select('id, order_number')
-        .eq('id', orderId)
-        .single();
-      if (kioskOrderError || !kioskOrder) {
-        throw new Error(kioskOrderError?.message ?? 'Order not found');
-      }
-
       return NextResponse.json(
         {
-          order_id: String(kioskOrder.id),
-          order_number: Number(kioskOrder.order_number)
+          order_id: String(orderId),
+          order_number: Number(orderNumber)
         },
         { status: 200 }
       );
