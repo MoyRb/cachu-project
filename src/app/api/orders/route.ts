@@ -132,6 +132,13 @@ export async function POST(request: NextRequest) {
       let productId: number | null = null;
       if (typeof item.product_id === 'number' && Number.isInteger(item.product_id)) {
         productId = item.product_id;
+      } else if (
+        item.product_id &&
+        typeof item.product_id === 'object' &&
+        typeof item.product_id.id === 'number' &&
+        Number.isInteger(item.product_id.id)
+      ) {
+        productId = item.product_id.id;
       } else if (typeof item.product_id === 'string') {
         const trimmed = item.product_id.trim();
         const parsed = trimmed === '' ? NaN : Number(trimmed);
@@ -146,7 +153,6 @@ export async function POST(request: NextRequest) {
         price_cents_snapshot: Number(item.price_cents_snapshot ?? item.price_cents),
         qty: Number(item.qty ?? 1),
         station: item.station,
-        status: item.status ?? 'EN_COLA',
         notes: item.notes ?? null,
         group_id: item.group_id ?? null
       };
@@ -176,6 +182,10 @@ export async function POST(request: NextRequest) {
       0
     );
     const total = subtotal + deliveryFee;
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[orders] items payload:', JSON.stringify(normalizedItems));
+    }
 
     const { data: orderId, error: createError } = await supabaseAdmin.rpc(
       'create_order_with_items',
