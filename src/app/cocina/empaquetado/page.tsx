@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { BottomActions } from "@/components/ui/BottomActions";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { TopBar } from "@/components/ui/TopBar";
 import { useKitchenRole } from "@/hooks/useKitchenRole";
 import { useRealtimeOrders } from "@/hooks/useRealtimeOrders";
@@ -28,6 +28,12 @@ const STATUS_PRIORITY: Record<OrderStatus, number> = {
   EN_PROCESO: 5,
   ENTREGADO: 6,
 };
+const formatLastUpdated = (date: Date) =>
+  `Última actualización: ${date.toLocaleTimeString("es-CL", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  })}`;
 
 type OrderAction = { label: string; nextStatus: OrderStatus };
 
@@ -60,6 +66,7 @@ export default function EmpaquetadoPage() {
     useKitchenRole("EMPAQUETADO");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionOrderId, setActionOrderId] = useState<number | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string>("");
 
   useEffect(() => {
     if (isReady && !hasSession) {
@@ -87,6 +94,12 @@ export default function EmpaquetadoPage() {
     loader,
     { intervalMs: 4000, enabled: true },
   );
+
+  useEffect(() => {
+    if (!isLoading && !error) {
+      setLastUpdated(formatLastUpdated(new Date()));
+    }
+  }, [data, error, isLoading]);
 
   const orders = useMemo(() => {
     return (data ?? []).slice().sort((left, right) => {
@@ -144,6 +157,14 @@ export default function EmpaquetadoPage() {
     return null;
   }
 
+  const isEmpty = orders.length === 0;
+  const emptyTitle = error
+    ? "Sin conexión"
+    : "Sin pedidos para empaquetar";
+  const emptySubtitle = error
+    ? error
+    : "Cuando plancha y freidora terminen, aparecerán aquí.";
+
   return (
     <main className="min-h-screen bg-cream px-6 py-8">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
@@ -170,132 +191,120 @@ export default function EmpaquetadoPage() {
         </TopBar>
 
         <section className="space-y-6">
-          {error ? (
-            <Card className="border-2 border-wood/40 bg-cream">
-              <CardTitle>Sin conexión</CardTitle>
-              <CardDescription className="mt-2 text-base">
-                {error}
-              </CardDescription>
-            </Card>
-          ) : null}
-          {actionError ? (
-            <Card className="border-2 border-wood/40 bg-cream">
-              <CardTitle>No se pudo actualizar</CardTitle>
-              <CardDescription className="mt-2 text-base">
-                {actionError}
-              </CardDescription>
-            </Card>
-          ) : null}
+          {isEmpty ? (
+            <div className="flex min-h-[60vh] items-center justify-center">
+              <EmptyState
+                title={emptyTitle}
+                subtitle={emptySubtitle}
+                hint="Actualiza cada 4s."
+                lastUpdated={lastUpdated || "Última actualización: --"}
+                isRefreshing={isLoading}
+                onRefresh={refresh}
+                icon="📦"
+              />
+            </div>
+          ) : (
+            <>
+              {error ? (
+                <Card className="border-2 border-wood/40 bg-cream">
+                  <CardTitle>Sin conexión</CardTitle>
+                  <CardDescription className="mt-2 text-base">
+                    {error}
+                  </CardDescription>
+                </Card>
+              ) : null}
+              {actionError ? (
+                <Card className="border-2 border-wood/40 bg-cream">
+                  <CardTitle>No se pudo actualizar</CardTitle>
+                  <CardDescription className="mt-2 text-base">
+                    {actionError}
+                  </CardDescription>
+                </Card>
+              ) : null}
 
-          {isLoading && orders.length === 0 ? (
-            <Card>
-              <CardTitle>Cargando pedidos...</CardTitle>
-              <CardDescription className="mt-2 text-base">
-                Actualizando estado de empaquetado.
-              </CardDescription>
-            </Card>
-          ) : null}
-
-          {orders.length === 0 && !isLoading ? (
-            <Card>
-              <CardTitle>Sin pedidos por empacar</CardTitle>
-              <CardDescription className="mt-2 text-base">
-                Los pedidos listos aparecerán automáticamente aquí.
-              </CardDescription>
-            </Card>
-          ) : null}
-
-          {orders.map((order) => {
-            const actions = getOrderActions(order);
-            const highlight = order.status === "LISTO_PARA_EMPACAR";
-            return (
-              <Card
-                key={order.id}
-                className={cn(
-                  "border-2",
-                  highlight ? "border-cta/80" : "border-border",
-                )}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-semibold uppercase tracking-wide text-ink/60">
-                      Pedido
-                    </p>
-                    <p className="text-4xl font-bold text-ink">
-                      #{order.order_number}
-                    </p>
-                    <p className="mt-2 text-base font-semibold text-ink/60">
-                      {formatOrderType(order.type)} · {formatOrderStatus(order.status)}
-                    </p>
-                  </div>
-                  <div className="text-right text-base font-semibold text-ink/70">
-                    <p>{formatElapsed(order.created_at)}</p>
-                    <p>{order.items.length} productos</p>
-                  </div>
-                </div>
-
-                <div className="mt-6 space-y-3">
-                  {order.items.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-border bg-cream/70 p-3 text-base font-semibold text-ink"
-                    >
+              {orders.map((order) => {
+                const actions = getOrderActions(order);
+                const highlight = order.status === "LISTO_PARA_EMPACAR";
+                return (
+                  <Card
+                    key={order.id}
+                    className={cn(
+                      "border-2",
+                      highlight ? "border-cta/80" : "border-border",
+                    )}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-4">
                       <div>
-                        <p className="text-lg font-semibold text-ink">
-                          {item.name_snapshot}
+                        <p className="text-sm font-semibold uppercase tracking-wide text-ink/60">
+                          Pedido
                         </p>
-                        <p className="text-sm text-ink/60">
-                          {formatItemStatus(item.status)} · {item.station} · x{item.qty}
+                        <p className="text-4xl font-bold text-ink">
+                          #{order.order_number}
                         </p>
-                        {item.notes ? (
-                          <p className="mt-1 text-sm text-ink/70">
-                            Nota: {item.notes}
-                          </p>
-                        ) : null}
+                        <p className="mt-2 text-base font-semibold text-ink/60">
+                          {formatOrderType(order.type)} ·{" "}
+                          {formatOrderStatus(order.status)}
+                        </p>
+                      </div>
+                      <div className="text-right text-base font-semibold text-ink/70">
+                        <p>{formatElapsed(order.created_at)}</p>
+                        <p>{order.items.length} productos</p>
                       </div>
                     </div>
-                  ))}
-                </div>
 
-                <div className="mt-6 flex flex-wrap items-center gap-3">
-                  {actions.map((action) => (
-                    <Button
-                      key={action.nextStatus}
-                      size="xl"
-                      onClick={() => handleStatusChange(order.id, action.nextStatus)}
-                      disabled={actionOrderId === order.id}
-                    >
-                      {action.label}
-                    </Button>
-                  ))}
-                  <Button
-                    size="lg"
-                    variant="secondary"
-                    onClick={() =>
-                      window.open(`/print/order/${order.id}`, "_blank")
-                    }
-                  >
-                    Imprimir ticket
-                  </Button>
-                </div>
-              </Card>
-            );
-          })}
+                    <div className="mt-6 space-y-3">
+                      {order.items.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-border bg-cream/70 p-3 text-base font-semibold text-ink"
+                        >
+                          <div>
+                            <p className="text-lg font-semibold text-ink">
+                              {item.name_snapshot}
+                            </p>
+                            <p className="text-sm text-ink/60">
+                              {formatItemStatus(item.status)} · {item.station} ·
+                              x{item.qty}
+                            </p>
+                            {item.notes ? (
+                              <p className="mt-1 text-sm text-ink/70">
+                                Nota: {item.notes}
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-6 flex flex-wrap items-center gap-3">
+                      {actions.map((action) => (
+                        <Button
+                          key={action.nextStatus}
+                          size="xl"
+                          onClick={() =>
+                            handleStatusChange(order.id, action.nextStatus)
+                          }
+                          disabled={actionOrderId === order.id}
+                        >
+                          {action.label}
+                        </Button>
+                      ))}
+                      <Button
+                        size="lg"
+                        variant="secondary"
+                        onClick={() =>
+                          window.open(`/print/order/${order.id}`, "_blank")
+                        }
+                      >
+                        Imprimir ticket
+                      </Button>
+                    </div>
+                  </Card>
+                );
+              })}
+            </>
+          )}
         </section>
-
-        <BottomActions className="gap-4">
-          <div>
-            <p className="text-base font-semibold text-ink">
-              Modo empaquetado
-            </p>
-            <p className="text-sm text-ink/60">
-              Actualización automática cada 4 segundos.
-            </p>
-          </div>
-          <Button size="lg" variant="secondary" onClick={refresh}>
-            Refrescar ahora
-          </Button>
-        </BottomActions>
       </div>
     </main>
   );
