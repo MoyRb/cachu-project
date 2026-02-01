@@ -28,6 +28,12 @@ const STATUS_PRIORITY: Record<OrderStatus, number> = {
   EN_PROCESO: 5,
   ENTREGADO: 6,
 };
+const VISIBLE_STATUSES: OrderStatus[] = [
+  "LISTO_PARA_EMPACAR",
+  "EMPACANDO",
+  "LISTO_PARA_ENTREGAR",
+  "EN_REPARTO",
+];
 const formatLastUpdated = (date: Date) =>
   `Última actualización: ${date.toLocaleTimeString("es-CL", {
     hour: "2-digit",
@@ -35,18 +41,21 @@ const formatLastUpdated = (date: Date) =>
     second: "2-digit",
   })}`;
 const getSortedOrders = (orders: Order[]) => {
-  return orders.slice().sort((left, right) => {
-    const priority =
-      (STATUS_PRIORITY[left.status] ?? 99) -
-      (STATUS_PRIORITY[right.status] ?? 99);
-    if (priority !== 0) {
-      return priority;
-    }
-    return (
-      new Date(left.created_at).getTime() -
-      new Date(right.created_at).getTime()
-    );
-  });
+  return orders
+    .filter((order) => VISIBLE_STATUSES.includes(order.status))
+    .slice()
+    .sort((left, right) => {
+      const priority =
+        (STATUS_PRIORITY[left.status] ?? 99) -
+        (STATUS_PRIORITY[right.status] ?? 99);
+      if (priority !== 0) {
+        return priority;
+      }
+      return (
+        new Date(left.created_at).getTime() -
+        new Date(right.created_at).getTime()
+      );
+    });
 };
 const getOrdersSignature = (orders: Order[]) =>
   JSON.stringify(
@@ -239,7 +248,7 @@ export default function EmpaquetadoPage() {
               <EmptyState
                 title={emptyTitle}
                 subtitle={emptySubtitle}
-                hint="Actualiza en vivo (respaldo cada 60s)."
+                hint="Actualiza en vivo (respaldo cada 25s)."
                 lastUpdated={
                   lastChangedAt
                     ? formatLastUpdated(lastChangedAt)

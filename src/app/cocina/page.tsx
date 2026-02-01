@@ -23,12 +23,33 @@ type RoleOption = {
   description: string;
 };
 
+const resolvePin = (envValue: string | undefined, fallback: string) => {
+  if (!envValue) {
+    return fallback;
+  }
+  const trimmed = envValue.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
+};
+
+const PLANCHA_PIN = resolvePin(
+  process.env.NEXT_PUBLIC_KITCHEN_PIN_PLANCHA,
+  "1111",
+);
+const FREIDORA_PIN = resolvePin(
+  process.env.NEXT_PUBLIC_KITCHEN_PIN_FREIDORA,
+  "2222",
+);
+const EMPAQUETADO_PIN = resolvePin(
+  process.env.NEXT_PUBLIC_KITCHEN_PIN_EMPAQUETADO,
+  "3333",
+);
+
 const ROLE_OPTIONS: RoleOption[] = [
   {
     role: "PLANCHA",
     label: "Plancha",
     userId: 2,
-    pin: "1111",
+    pin: PLANCHA_PIN,
     href: "/cocina/plancha",
     description: "Hamburguesas y plancha caliente.",
   },
@@ -36,7 +57,7 @@ const ROLE_OPTIONS: RoleOption[] = [
     role: "FREIDORA",
     label: "Freidora",
     userId: 3,
-    pin: "2222",
+    pin: FREIDORA_PIN,
     href: "/cocina/freidora",
     description: "Papas, croquetas y frituras.",
   },
@@ -44,7 +65,7 @@ const ROLE_OPTIONS: RoleOption[] = [
     role: "EMPAQUETADO",
     label: "Empaquetado",
     userId: 4,
-    pin: "3333",
+    pin: EMPAQUETADO_PIN,
     href: "/cocina/empaquetado",
     description: "Armar pedidos y entregar.",
   },
