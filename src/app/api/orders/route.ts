@@ -83,8 +83,13 @@ async function fetchOrders(
     throw new Error(itemsError.message);
   }
 
+  const normalizedItems = (items ?? []).map((item) => ({
+    ...item,
+    order_item_id: item.id
+  }));
+
   const itemsByOrder = new Map<number, any[]>();
-  for (const item of items ?? []) {
+  for (const item of normalizedItems) {
     const list = itemsByOrder.get(item.order_id) ?? [];
     list.push(item);
     itemsByOrder.set(item.order_id, list);

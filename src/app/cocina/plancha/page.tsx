@@ -39,6 +39,12 @@ const compareItemIds = (
   left: { id: Order["items"][number]["id"] },
   right: { id: Order["items"][number]["id"] },
 ) => String(left.id).localeCompare(String(right.id), "es", { numeric: true });
+const resolveRequestError = (data: unknown, err: unknown) =>
+  typeof (data as { error?: unknown })?.error === "string"
+    ? (data as { error: string }).error
+    : err instanceof Error
+      ? err.message
+      : String(err);
 const getOrdersSignature = (orders: Order[]) =>
   JSON.stringify(
     getVisibleOrders(orders).map((order) => ({
@@ -99,7 +105,9 @@ export default function PlanchaPage() {
     );
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload?.error ?? "No se pudieron cargar los pedidos.");
+      throw new Error(
+        resolveRequestError(payload, new Error("No se pudieron cargar los pedidos.")),
+      );
     }
     return payload?.orders ?? [];
   };
@@ -148,15 +156,13 @@ export default function PlanchaPage() {
       );
       const payload = await response.json();
       if (!response.ok) {
-        throw new Error(payload?.error ?? "No se pudo actualizar el ítem.");
+        throw new Error(
+          resolveRequestError(payload, new Error("No se pudo actualizar el ítem.")),
+        );
       }
       await refreshNow();
     } catch (updateError) {
-      setActionError(
-        updateError instanceof Error
-          ? updateError.message
-          : "No se pudo actualizar el ítem.",
-      );
+      setActionError(resolveRequestError(null, updateError));
     } finally {
       setActionItemId(null);
     }
