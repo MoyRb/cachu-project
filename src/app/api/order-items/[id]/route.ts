@@ -15,10 +15,10 @@ export async function PATCH(
   context: { params: { id: string } }
 ) {
   try {
-    const roleRaw = request.headers.get('x-role') ?? '';
-    const userRaw = request.headers.get('x-user-id') ?? '';
-    const role = roleRaw.trim().toUpperCase();
-    const userId = userRaw.trim();
+    const roleHeader = request.headers.get('x-role') ?? '';
+    const userIdHeader = request.headers.get('x-user-id') ?? '';
+    const role = roleHeader.trim().toUpperCase();
+    const userId = userIdHeader.trim();
 
     if (!role || !userId) {
       return jsonError('Missing authentication headers', 401);
@@ -29,27 +29,17 @@ export async function PATCH(
     ensureRole(role as Role, KITCHEN_ROLES);
 
     const parsedUserId = Number(userId);
-    if (!Number.isInteger(parsedUserId) || parsedUserId <= 0) {
+    if (!Number.isFinite(parsedUserId) || parsedUserId <= 0) {
       return jsonError('Invalid user id', 400);
     }
 
-    const idStr = context.params?.id;
-    if (!idStr || typeof idStr !== 'string') {
-      return jsonError('Invalid item id');
+    const paramsId = context.params?.id;
+    if (!paramsId || typeof paramsId !== 'string') {
+      return jsonError(`Invalid item id: ${String(paramsId)}`);
     }
-    const idNum = Number(idStr);
-    if (!Number.isInteger(idNum) || idNum <= 0) {
-      return jsonError('Invalid item id');
-    }
-
-    if (process.env.NODE_ENV === 'development') {
-      console.debug('[order-items] PATCH', {
-        idStr,
-        idNum,
-        role,
-        userId,
-        url: request.url,
-      });
+    const itemId = Number(paramsId);
+    if (!Number.isFinite(itemId) || itemId <= 0) {
+      return jsonError(`Invalid item id: ${paramsId}`);
     }
 
     let supabase;
@@ -63,15 +53,42 @@ export async function PATCH(
       return jsonError(message, 500);
     }
 
-    const { status } = await request.json();
-    if (!ITEM_STATUSES.includes(status)) {
+    let body: Record<string, unknown> = {};
+    try {
+      const rawBody = await request.text();
+      if (rawBody) {
+        body = JSON.parse(rawBody);
+      }
+    } catch (error) {
+      return jsonError('Invalid JSON');
+    }
+
+    const desiredRaw = body.status ?? body.nextStatus ?? body.next_status;
+    if (typeof desiredRaw !== 'string') {
+      return jsonError('Missing status');
+    }
+    const desired = desiredRaw.trim();
+    if (!desired) {
+      return jsonError('Missing status');
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('[order-items] PATCH', {
+        paramsId,
+        itemId,
+        desired,
+        roleHeader,
+        userIdHeader,
+      });
+    }
+    if (!ITEM_STATUSES.includes(desired as (typeof ITEM_STATUSES)[number])) {
       return jsonError('Invalid status');
     }
 
     const { data: item, error: itemError } = await supabase
       .from('order_items')
       .select('id, station, order_id, product_id')
-      .eq('id', idNum)
+      .eq('id', itemId)
       .maybeSingle();
     if (itemError) {
       return jsonError(`Supabase error: ${itemError.message}`, 500);
@@ -89,8 +106,8 @@ export async function PATCH(
 
     const { data: updated, error: updateError } = await supabase
       .from('order_items')
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq('id', idNum)
+      .update({ status: desired, updated_at: new Date().toISOString() })
+      .eq('id', itemId)
       .select('*')
       .maybeSingle();
     if (updateError) {
@@ -100,7 +117,7 @@ export async function PATCH(
       return jsonError('Order item not found', 404);
     }
 
-    if (status === 'LISTO') {
+    if (desired === 'LISTO') {
       const { count, error: remainingError } = await supabase
         .from('order_items')
         .select('id', { count: 'exact', head: true })

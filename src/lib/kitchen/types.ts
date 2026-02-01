@@ -13,6 +13,7 @@ export type ItemStatus = "EN_COLA" | "PENDIENTE" | "EN_PREPARACION" | "LISTO";
 
 export type OrderItem = {
   id: number | string;
+  order_item_id?: number | string;
   order_id: number | string;
   name_snapshot: string;
   qty: number;

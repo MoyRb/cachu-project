@@ -36,9 +36,14 @@ const getVisibleOrders = (orders: Order[]) => {
     );
 };
 const compareItemIds = (
-  left: { id: Order["items"][number]["id"] },
-  right: { id: Order["items"][number]["id"] },
-) => String(left.id).localeCompare(String(right.id), "es", { numeric: true });
+  left: { id: Order["items"][number]["id"]; order_item_id?: Order["items"][number]["order_item_id"] },
+  right: { id: Order["items"][number]["id"]; order_item_id?: Order["items"][number]["order_item_id"] },
+) =>
+  String(left.order_item_id ?? left.id).localeCompare(
+    String(right.order_item_id ?? right.id),
+    "es",
+    { numeric: true },
+  );
 const resolveRequestError = (data: unknown, err: unknown) =>
   typeof (data as { error?: unknown })?.error === "string"
     ? (data as { error: string }).error
@@ -53,7 +58,7 @@ const getOrdersSignature = (orders: Order[]) =>
       updated_at: order.updated_at,
       items: order.items
         .map((item) => ({
-          id: item.id,
+          id: item.order_item_id ?? item.id,
           status: item.status,
           updated_at: item.updated_at,
         }))
@@ -133,17 +138,19 @@ export default function PlanchaPage() {
   }, [data]);
 
   const handleStatusChange = async (
-    itemId: string | number,
+    orderItemId: string | number,
     nextStatus: ItemStatus,
   ) => {
     setActionError(null);
-    setActionItemId(itemId);
+    setActionItemId(orderItemId);
     try {
       if (process.env.NODE_ENV === "development") {
-        console.log("[cocina-plancha] PATCH order item:", itemId);
+        console.log("[cocina-plancha] PATCH order item:", {
+          order_item_id: orderItemId,
+        });
       }
       const response = await kitchenFetch(
-        `/api/order-items/${itemId}`,
+        `/api/order-items/${orderItemId}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -284,6 +291,7 @@ export default function PlanchaPage() {
                   <div className="mt-6 space-y-4">
                     {order.items.map((item) => {
                       const action = ITEM_ACTIONS[item.status];
+                      const orderItemId = item.order_item_id ?? item.id;
                       return (
                         <div
                           key={item.id}
@@ -308,11 +316,11 @@ export default function PlanchaPage() {
                                 size="xl"
                                 onClick={() =>
                                   handleStatusChange(
-                                    item.id,
+                                    orderItemId,
                                     action.nextStatus,
                                   )
                                 }
-                                disabled={actionItemId === item.id}
+                                disabled={actionItemId === orderItemId}
                               >
                                 {action.label}
                               </Button>
