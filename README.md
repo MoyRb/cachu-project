@@ -131,3 +131,14 @@ curl http://localhost:3000/api/orders/1 \
   -H "X-ROLE: ADMIN" \
   -H "X-USER-ID: 1"
 ```
+
+> Nota: para el PATCH de `/api/order-items/:id`, usa el `id` real del item en `order_items`
+> (por ejemplo, `items[].id` en la respuesta de `/api/orders`).
+
+```bash
+curl -X PATCH http://localhost:3000/api/order-items/123 \
+  -H "Content-Type: application/json" \
+  -H "X-ROLE: PLANCHA" \
+  -H "X-USER-ID: 2" \
+  -d '{ "status": "EN_PREPARACION" }'
+```
