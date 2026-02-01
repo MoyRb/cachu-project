@@ -12,7 +12,7 @@ function jsonError(message: string, status = 400) {
 
 export async function PATCH(
   request: NextRequest,
-  context: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const roleHeader = request.headers.get('x-role') ?? '';
@@ -33,13 +33,10 @@ export async function PATCH(
       return jsonError('Invalid user id', 400);
     }
 
-    const paramsId = context.params?.id;
-    if (!paramsId || typeof paramsId !== 'string') {
-      return jsonError(`Invalid item id: ${String(paramsId)}`);
-    }
-    const itemId = Number(paramsId);
+    const { id } = await params;
+    const itemId = Number(id);
     if (!Number.isFinite(itemId) || itemId <= 0) {
-      return jsonError(`Invalid item id: ${paramsId}`);
+      return jsonError(`Invalid item id: ${id}`);
     }
 
     let supabase;
@@ -74,7 +71,7 @@ export async function PATCH(
 
     if (process.env.NODE_ENV === 'development') {
       console.debug('[order-items] PATCH', {
-        paramsId,
+        paramsId: id,
         itemId,
         desired,
         roleHeader,

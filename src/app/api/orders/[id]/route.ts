@@ -49,14 +49,14 @@ async function fetchOrder(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = getSupabaseAdmin();
     const auth = getAuthContext(request);
     ensureRole(auth.role, ['ADMIN', 'PLANCHA', 'FREIDORA', 'EMPAQUETADO']);
 
-    const { id } = params;
+    const { id } = await params;
     const orderId = Number(id);
     if (!Number.isInteger(orderId)) {
       return jsonError('Invalid order id');
@@ -89,14 +89,14 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = getSupabaseAdmin();
     const auth = getAuthContext(request);
     ensureRole(auth.role, ['ADMIN', 'EMPAQUETADO']);
 
-    const { id } = params;
+    const { id } = await params;
     const orderId = Number(id);
     if (!Number.isInteger(orderId)) {
       return jsonError('Invalid order id');
