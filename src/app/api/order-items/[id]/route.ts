@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ensureRole, getAuthContext } from '@/lib/auth';
+import { ensureRole, Role } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 const ITEM_STATUSES = ['EN_COLA', 'PENDIENTE', 'EN_PREPARACION', 'LISTO'] as const;
 const ORDER_READY_STATUSES = ['RECIBIDO', 'EN_PROCESO'] as const;
+const KITCHEN_ROLES: Role[] = ['ADMIN', 'PLANCHA', 'FREIDORA'];
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
@@ -11,53 +12,43 @@ function jsonError(message: string, status = 400) {
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
   try {
-    const rawRoleHeader = request.headers.get('x-role');
-    const rawUserIdHeader = request.headers.get('x-user-id');
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('[order-items] kitchen headers:', {
-        hasRole: Boolean(rawRoleHeader),
-        hasUserId: Boolean(rawUserIdHeader),
-      });
+    const roleRaw = request.headers.get('x-role') ?? '';
+    const userRaw = request.headers.get('x-user-id') ?? '';
+    const role = roleRaw.trim().toUpperCase();
+    const userId = userRaw.trim();
+
+    if (!role || !userId) {
+      return jsonError('Missing authentication headers', 401);
+    }
+    if (!KITCHEN_ROLES.includes(role as Role)) {
+      return jsonError('Invalid role', 401);
+    }
+    ensureRole(role as Role, KITCHEN_ROLES);
+
+    const parsedUserId = Number(userId);
+    if (!Number.isInteger(parsedUserId) || parsedUserId <= 0) {
+      return jsonError('Invalid user id', 400);
     }
 
-    const auth = getAuthContext(request);
-    ensureRole(auth.role, ['ADMIN', 'PLANCHA', 'FREIDORA']);
-
-    const rawId = (params.id ?? '').trim();
-    if (!rawId) {
+    const idStr = context.params?.id;
+    if (!idStr || typeof idStr !== 'string') {
+      return jsonError('Invalid item id');
+    }
+    const idNum = Number(idStr);
+    if (!Number.isInteger(idNum) || idNum <= 0) {
       return jsonError('Invalid item id');
     }
 
-    const isCompositeId = rawId.includes(':');
-    let itemId: number | null = null;
-    let lookupOrderId: number | null = null;
-    let lookupProductId: number | null = null;
-
-    if (isCompositeId) {
-      const [orderIdPart, productIdPart] = rawId.split(':');
-      const orderId = Number((orderIdPart ?? '').trim());
-      const productId = Number((productIdPart ?? '').trim());
-      if (Number.isNaN(orderId) || Number.isNaN(productId)) {
-        return jsonError('Invalid item id');
-      }
-      lookupOrderId = orderId;
-      lookupProductId = productId;
-    } else {
-      const parsedId = Number(rawId);
-      if (Number.isNaN(parsedId)) {
-        return jsonError('Invalid item id');
-      }
-      itemId = parsedId;
-    }
-
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('[order-items] auth context:', {
-        role: auth.role,
-        userId: auth.userId,
-        itemId: itemId ?? `${lookupOrderId}:${lookupProductId}`,
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('[order-items] PATCH', {
+        idStr,
+        idNum,
+        role,
+        userId,
+        url: request.url,
       });
     }
 
@@ -77,33 +68,36 @@ export async function PATCH(
       return jsonError('Invalid status');
     }
 
-    const itemQuery = supabase
+    const { data: item, error: itemError } = await supabase
       .from('order_items')
-      .select('id, station, order_id, product_id');
-    const { data: item, error: itemError } = lookupOrderId && lookupProductId
-      ? await itemQuery
-          .eq('order_id', lookupOrderId)
-          .eq('product_id', lookupProductId)
-          .single()
-      : await itemQuery.eq('id', itemId).single();
-    if (itemError || !item) {
-      return jsonError('No se encontró el ítem solicitado.', 404);
+      .select('id, station, order_id, product_id')
+      .eq('id', idNum)
+      .maybeSingle();
+    if (itemError) {
+      return jsonError(`Supabase error: ${itemError.message}`, 500);
     }
-    itemId = Number(item.id);
+    if (!item) {
+      return jsonError('Order item not found', 404);
+    }
 
     if (
-      (auth.role === 'PLANCHA' && item.station !== 'PLANCHA') ||
-      (auth.role === 'FREIDORA' && item.station !== 'FREIDORA')
+      (role === 'PLANCHA' && item.station !== 'PLANCHA') ||
+      (role === 'FREIDORA' && item.station !== 'FREIDORA')
     ) {
       return jsonError('Forbidden', 403);
     }
 
-    const { error: updateError } = await supabase
+    const { data: updated, error: updateError } = await supabase
       .from('order_items')
       .update({ status, updated_at: new Date().toISOString() })
-      .eq('id', itemId);
+      .eq('id', idNum)
+      .select('*')
+      .maybeSingle();
     if (updateError) {
-      throw new Error(updateError.message);
+      return jsonError(`Supabase error: ${updateError.message}`, 500);
+    }
+    if (!updated) {
+      return jsonError('Order item not found', 404);
     }
 
     if (status === 'LISTO') {
@@ -136,15 +130,6 @@ export async function PATCH(
           }
         }
       }
-    }
-
-    const { data: updated, error: updatedError } = await supabase
-      .from('order_items')
-      .select('*')
-      .eq('id', itemId)
-      .single();
-    if (updatedError || !updated) {
-      throw new Error(updatedError?.message ?? 'Item not found');
     }
 
     return NextResponse.json({ item: updated });
