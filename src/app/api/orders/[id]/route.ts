@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureRole, getAuthContext, Role } from '@/lib/auth';
-import { supabaseAdmin } from '@/lib/supabase/admin';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 const ORDER_STATUSES = [
   'RECIBIDO',
@@ -18,8 +18,12 @@ function jsonError(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
 }
 
-async function fetchOrder(orderId: number, role: Role) {
-  const { data: order, error } = await supabaseAdmin
+async function fetchOrder(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  orderId: number,
+  role: Role
+) {
+  const { data: order, error } = await supabase
     .from('orders')
     .select('*')
     .eq('id', orderId)
@@ -28,7 +32,7 @@ async function fetchOrder(orderId: number, role: Role) {
     return null;
   }
 
-  let itemsQuery = supabaseAdmin.from('order_items').select('*').eq('order_id', orderId);
+  let itemsQuery = supabase.from('order_items').select('*').eq('order_id', orderId);
   if (role === 'PLANCHA') {
     itemsQuery = itemsQuery.eq('station', 'PLANCHA');
   } else if (role === 'FREIDORA') {
@@ -48,6 +52,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const supabase = getSupabaseAdmin();
     const auth = getAuthContext(request);
     ensureRole(auth.role, ['ADMIN', 'PLANCHA', 'FREIDORA', 'EMPAQUETADO']);
 
@@ -57,7 +62,7 @@ export async function GET(
       return jsonError('Invalid order id');
     }
 
-    const order = await fetchOrder(orderId, auth.role);
+    const order = await fetchOrder(supabase, orderId, auth.role);
     if (!order) {
       return jsonError('Not found', 404);
     }
@@ -72,7 +77,12 @@ export async function GET(
     return NextResponse.json({ order });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unauthorized';
-    const status = message === 'Forbidden' ? 403 : 401;
+    const status =
+      message === 'Forbidden'
+        ? 403
+        : message.startsWith('Server misconfigured')
+          ? 500
+          : 401;
     return jsonError(message, status);
   }
 }
@@ -82,6 +92,7 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    const supabase = getSupabaseAdmin();
     const auth = getAuthContext(request);
     ensureRole(auth.role, ['ADMIN', 'EMPAQUETADO']);
 
@@ -100,7 +111,7 @@ export async function PATCH(
       return jsonError('Forbidden', 403);
     }
 
-    const { data: order, error: orderError } = await supabaseAdmin
+    const { data: order, error: orderError } = await supabase
       .from('orders')
       .select('id')
       .eq('id', orderId)
@@ -109,7 +120,7 @@ export async function PATCH(
       return jsonError('Not found', 404);
     }
 
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await supabase
       .from('orders')
       .update({ status, updated_at: new Date().toISOString() })
       .eq('id', orderId);
@@ -117,11 +128,16 @@ export async function PATCH(
       throw new Error(updateError.message);
     }
 
-    const updated = await fetchOrder(orderId, auth.role);
+    const updated = await fetchOrder(supabase, orderId, auth.role);
     return NextResponse.json({ order: updated });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unauthorized';
-    const status = message === 'Forbidden' ? 403 : 401;
+    const status =
+      message === 'Forbidden'
+        ? 403
+        : message.startsWith('Server misconfigured')
+          ? 500
+          : 401;
     return jsonError(message, status);
   }
 }

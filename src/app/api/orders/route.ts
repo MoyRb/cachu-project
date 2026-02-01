@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureRole, getAuthContext, Role } from '@/lib/auth';
-import { supabaseAdmin } from '@/lib/supabase/admin';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 const ORDER_STATUSES = [
   'RECIBIDO',
@@ -35,11 +35,12 @@ function toJsonSafe(value: unknown): unknown {
 }
 
 async function fetchOrders(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
   role: Role,
   station: string | null,
   filters: { status?: string | null; type?: string | null; date?: string | null }
 ) {
-  let query = supabaseAdmin.from('orders').select('*').order('created_at', { ascending: false });
+  let query = supabase.from('orders').select('*').order('created_at', { ascending: false });
   if (filters.status) {
     query = query.eq('status', filters.status);
   }
@@ -69,7 +70,7 @@ async function fetchOrders(
   }
 
   const orderIds = scopedOrders.map((order) => order.id);
-  let itemsQuery = supabaseAdmin
+  let itemsQuery = supabase
     .from('order_items')
     .select(
       'id, order_id, product_id, station, status, qty, name_snapshot, price_cents_snapshot, notes, group_id, created_at, updated_at'
@@ -108,6 +109,7 @@ async function fetchOrders(
 
 export async function GET(request: NextRequest) {
   try {
+    const supabase = getSupabaseAdmin();
     const auth = getAuthContext(request);
     ensureRole(auth.role, ['ADMIN', 'PLANCHA', 'FREIDORA', 'EMPAQUETADO']);
 
@@ -125,18 +127,24 @@ export async function GET(request: NextRequest) {
 
     const station =
       auth.role === 'PLANCHA' ? 'PLANCHA' : auth.role === 'FREIDORA' ? 'FREIDORA' : null;
-    const orders = await fetchOrders(auth.role, station, { status, type, date });
+    const orders = await fetchOrders(supabase, auth.role, station, { status, type, date });
 
     return NextResponse.json(toJsonSafe({ orders }));
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unauthorized';
-    const status = message === 'Forbidden' ? 403 : 401;
+    const status =
+      message === 'Forbidden'
+        ? 403
+        : message.startsWith('Server misconfigured')
+          ? 500
+          : 401;
     return jsonError(message, status);
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = getSupabaseAdmin();
     const payload = await request.json();
     const { type, customer_name, customer_phone, address_json, notes, items, delivery_fee_cents } =
       payload ?? {};
@@ -235,7 +243,7 @@ export async function POST(request: NextRequest) {
       console.log('[orders] rpcItems JSON:', JSON.stringify(rpcItems));
     }
 
-    const { data, error: createError } = await supabaseAdmin.rpc(
+    const { data, error: createError } = await supabase.rpc(
       'create_order_with_items',
       {
         p_type: type,
@@ -294,7 +302,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: order, error: orderError } = await supabaseAdmin
+    const { data: order, error: orderError } = await supabase
       .from('orders')
       .select('*')
       .eq('id', orderId)
@@ -303,7 +311,7 @@ export async function POST(request: NextRequest) {
       throw new Error(orderError?.message ?? 'Order not found');
     }
 
-    const { data: orderItems, error: itemsError } = await supabaseAdmin
+    const { data: orderItems, error: itemsError } = await supabase
       .from('order_items')
       .select('*')
       .eq('order_id', orderId);
@@ -331,7 +339,9 @@ export async function POST(request: NextRequest) {
     const status =
       message === 'Forbidden'
         ? 403
-        : message === 'Unauthorized' || message === 'Missing authentication headers'
+        : message.startsWith('Server misconfigured')
+          ? 500
+          : message === 'Unauthorized' || message === 'Missing kitchen auth headers'
           ? 401
           : 500;
     return jsonError(message, status);

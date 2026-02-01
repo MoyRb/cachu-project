@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureRole, getAuthContext } from '@/lib/auth';
-import { supabaseAdmin } from '@/lib/supabase/admin';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 const ITEM_STATUSES = ['EN_COLA', 'PENDIENTE', 'EN_PREPARACION', 'LISTO'] as const;
 const ORDER_READY_STATUSES = ['RECIBIDO', 'EN_PROCESO'] as const;
@@ -14,29 +14,62 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    const rawRoleHeader = request.headers.get('x-role');
+    const rawUserIdHeader = request.headers.get('x-user-id');
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[order-items] kitchen headers:', {
+        hasRole: Boolean(rawRoleHeader),
+        hasUserId: Boolean(rawUserIdHeader),
+      });
+    }
+
     const auth = getAuthContext(request);
     ensureRole(auth.role, ['ADMIN', 'PLANCHA', 'FREIDORA']);
 
-    const rawId = params.id.trim();
-    const numericIdMatch = /^\d+$/.exec(rawId);
+    const rawId = (params.id ?? '').trim();
+    if (!rawId) {
+      return jsonError('Invalid item id');
+    }
+
     const isCompositeId = rawId.includes(':');
-    let itemId: string | null = null;
-    let lookupOrderId: string | null = null;
-    let lookupProductId: string | null = null;
+    let itemId: number | null = null;
+    let lookupOrderId: number | null = null;
+    let lookupProductId: number | null = null;
 
     if (isCompositeId) {
       const [orderIdPart, productIdPart] = rawId.split(':');
-      const orderMatch = /^\d+$/.exec(orderIdPart ?? '');
-      const productMatch = /^\d+$/.exec(productIdPart ?? '');
-      if (!orderMatch || !productMatch) {
+      const orderId = Number((orderIdPart ?? '').trim());
+      const productId = Number((productIdPart ?? '').trim());
+      if (Number.isNaN(orderId) || Number.isNaN(productId)) {
         return jsonError('Invalid item id');
       }
-      lookupOrderId = orderIdPart;
-      lookupProductId = productIdPart;
-    } else if (numericIdMatch) {
-      itemId = rawId;
+      lookupOrderId = orderId;
+      lookupProductId = productId;
     } else {
-      return jsonError('Invalid item id');
+      const parsedId = Number(rawId);
+      if (Number.isNaN(parsedId)) {
+        return jsonError('Invalid item id');
+      }
+      itemId = parsedId;
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[order-items] auth context:', {
+        role: auth.role,
+        userId: auth.userId,
+        itemId: itemId ?? `${lookupOrderId}:${lookupProductId}`,
+      });
+    }
+
+    let supabase;
+    try {
+      supabase = getSupabaseAdmin();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Server misconfigured';
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[order-items] supabase config error:', message);
+      }
+      return jsonError(message, 500);
     }
 
     const { status } = await request.json();
@@ -44,7 +77,7 @@ export async function PATCH(
       return jsonError('Invalid status');
     }
 
-    const itemQuery = supabaseAdmin
+    const itemQuery = supabase
       .from('order_items')
       .select('id, station, order_id, product_id');
     const { data: item, error: itemError } = lookupOrderId && lookupProductId
@@ -56,7 +89,7 @@ export async function PATCH(
     if (itemError || !item) {
       return jsonError('No se encontró el ítem solicitado.', 404);
     }
-    itemId = String(item.id);
+    itemId = Number(item.id);
 
     if (
       (auth.role === 'PLANCHA' && item.station !== 'PLANCHA') ||
@@ -65,7 +98,7 @@ export async function PATCH(
       return jsonError('Forbidden', 403);
     }
 
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await supabase
       .from('order_items')
       .update({ status, updated_at: new Date().toISOString() })
       .eq('id', itemId);
@@ -74,7 +107,7 @@ export async function PATCH(
     }
 
     if (status === 'LISTO') {
-      const { count, error: remainingError } = await supabaseAdmin
+      const { count, error: remainingError } = await supabase
         .from('order_items')
         .select('id', { count: 'exact', head: true })
         .eq('order_id', item.order_id)
@@ -84,7 +117,7 @@ export async function PATCH(
       }
 
       if (count === 0) {
-        const { data: order, error: orderError } = await supabaseAdmin
+        const { data: order, error: orderError } = await supabase
           .from('orders')
           .select('id, status')
           .eq('id', item.order_id)
@@ -94,7 +127,7 @@ export async function PATCH(
         }
 
         if (ORDER_READY_STATUSES.includes(order.status)) {
-          const { error: orderUpdateError } = await supabaseAdmin
+          const { error: orderUpdateError } = await supabase
             .from('orders')
             .update({ status: 'LISTO_PARA_EMPACAR', updated_at: new Date().toISOString() })
             .eq('id', item.order_id);
@@ -105,7 +138,7 @@ export async function PATCH(
       }
     }
 
-    const { data: updated, error: updatedError } = await supabaseAdmin
+    const { data: updated, error: updatedError } = await supabase
       .from('order_items')
       .select('*')
       .eq('id', itemId)
@@ -117,7 +150,26 @@ export async function PATCH(
     return NextResponse.json({ item: updated });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unauthorized';
-    const status = message === 'Forbidden' ? 403 : 401;
-    return jsonError(message, status);
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[order-items] error:', message);
+    }
+
+    if (message === 'Forbidden') {
+      return jsonError(message, 403);
+    }
+    if (message === 'Invalid user id') {
+      return jsonError(message, 400);
+    }
+    if (message.startsWith('Server misconfigured')) {
+      return jsonError(message, 500);
+    }
+    if (message === 'Missing kitchen auth headers') {
+      return jsonError(message, 401);
+    }
+    if (message === 'Invalid role') {
+      return jsonError(message, 401);
+    }
+
+    return jsonError(message, 401);
   }
 }
