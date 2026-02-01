@@ -57,6 +57,10 @@ const getSortedOrders = (orders: Order[]) => {
       );
     });
 };
+const compareItemIds = (
+  left: { id: Order["items"][number]["id"] },
+  right: { id: Order["items"][number]["id"] },
+) => String(left.id).localeCompare(String(right.id), "es", { numeric: true });
 const getOrdersSignature = (orders: Order[]) =>
   JSON.stringify(
     getSortedOrders(orders).map((order) => ({
@@ -69,7 +73,7 @@ const getOrdersSignature = (orders: Order[]) =>
           status: item.status,
           updated_at: item.updated_at,
         }))
-        .sort((left, right) => left.id - right.id),
+        .sort(compareItemIds),
     })),
   );
 

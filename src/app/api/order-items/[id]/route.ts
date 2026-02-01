@@ -17,8 +17,25 @@ export async function PATCH(
     const auth = getAuthContext(request);
     ensureRole(auth.role, ['ADMIN', 'PLANCHA', 'FREIDORA']);
 
-    const itemId = Number(params.id);
-    if (!Number.isInteger(itemId)) {
+    const rawId = params.id.trim();
+    const numericIdMatch = /^\d+$/.exec(rawId);
+    const isCompositeId = rawId.includes(':');
+    let itemId: string | null = null;
+    let lookupOrderId: string | null = null;
+    let lookupProductId: string | null = null;
+
+    if (isCompositeId) {
+      const [orderIdPart, productIdPart] = rawId.split(':');
+      const orderMatch = /^\d+$/.exec(orderIdPart ?? '');
+      const productMatch = /^\d+$/.exec(productIdPart ?? '');
+      if (!orderMatch || !productMatch) {
+        return jsonError('Invalid item id');
+      }
+      lookupOrderId = orderIdPart;
+      lookupProductId = productIdPart;
+    } else if (numericIdMatch) {
+      itemId = rawId;
+    } else {
       return jsonError('Invalid item id');
     }
 
@@ -27,14 +44,19 @@ export async function PATCH(
       return jsonError('Invalid status');
     }
 
-    const { data: item, error: itemError } = await supabaseAdmin
+    const itemQuery = supabaseAdmin
       .from('order_items')
-      .select('id, station, order_id')
-      .eq('id', itemId)
-      .single();
+      .select('id, station, order_id, product_id');
+    const { data: item, error: itemError } = lookupOrderId && lookupProductId
+      ? await itemQuery
+          .eq('order_id', lookupOrderId)
+          .eq('product_id', lookupProductId)
+          .single()
+      : await itemQuery.eq('id', itemId).single();
     if (itemError || !item) {
-      return jsonError('Not found', 404);
+      return jsonError('No se encontró el ítem solicitado.', 404);
     }
+    itemId = String(item.id);
 
     if (
       (auth.role === 'PLANCHA' && item.station !== 'PLANCHA') ||

@@ -12,8 +12,8 @@ export type OrderType = "DINEIN" | "TAKEOUT" | "DELIVERY";
 export type ItemStatus = "EN_COLA" | "PENDIENTE" | "EN_PREPARACION" | "LISTO";
 
 export type OrderItem = {
-  id: number;
-  order_id: number;
+  id: number | string;
+  order_id: number | string;
   name_snapshot: string;
   qty: number;
   price_cents_snapshot?: number | null;

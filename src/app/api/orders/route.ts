@@ -69,7 +69,12 @@ async function fetchOrders(
   }
 
   const orderIds = scopedOrders.map((order) => order.id);
-  let itemsQuery = supabaseAdmin.from('order_items').select('*').in('order_id', orderIds);
+  let itemsQuery = supabaseAdmin
+    .from('order_items')
+    .select(
+      'id, order_id, product_id, station, status, qty, name_snapshot, price_cents_snapshot, notes, group_id, created_at, updated_at'
+    )
+    .in('order_id', orderIds);
   if (station) {
     itemsQuery = itemsQuery.eq('station', station);
   }
@@ -117,7 +122,7 @@ export async function GET(request: NextRequest) {
       auth.role === 'PLANCHA' ? 'PLANCHA' : auth.role === 'FREIDORA' ? 'FREIDORA' : null;
     const orders = await fetchOrders(auth.role, station, { status, type, date });
 
-    return NextResponse.json({ orders });
+    return NextResponse.json(toJsonSafe({ orders }));
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unauthorized';
     const status = message === 'Forbidden' ? 403 : 401;

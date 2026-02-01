@@ -35,6 +35,10 @@ const getVisibleOrders = (orders: Order[]) => {
         new Date(right.created_at).getTime(),
     );
 };
+const compareItemIds = (
+  left: { id: Order["items"][number]["id"] },
+  right: { id: Order["items"][number]["id"] },
+) => String(left.id).localeCompare(String(right.id), "es", { numeric: true });
 const getOrdersSignature = (orders: Order[]) =>
   JSON.stringify(
     getVisibleOrders(orders).map((order) => ({
@@ -47,7 +51,7 @@ const getOrdersSignature = (orders: Order[]) =>
           status: item.status,
           updated_at: item.updated_at,
         }))
-        .sort((left, right) => left.id - right.id),
+        .sort(compareItemIds),
     })),
   );
 
@@ -66,7 +70,9 @@ export default function FreidoraPage() {
   const { role, userId, hasSession, isReady, clearSession } =
     useKitchenRole("FREIDORA");
   const [actionError, setActionError] = useState<string | null>(null);
-  const [actionItemId, setActionItemId] = useState<number | null>(null);
+  const [actionItemId, setActionItemId] = useState<string | number | null>(
+    null,
+  );
 
   useEffect(() => {
     if (isReady && !hasSession) {
@@ -119,12 +125,15 @@ export default function FreidoraPage() {
   }, [data]);
 
   const handleStatusChange = async (
-    itemId: number,
+    itemId: string | number,
     nextStatus: ItemStatus,
   ) => {
     setActionError(null);
     setActionItemId(itemId);
     try {
+      if (process.env.NODE_ENV === "development") {
+        console.log("[cocina-freidora] PATCH order item:", itemId);
+      }
       const response = await kitchenFetch(
         `/api/order-items/${itemId}`,
         {
