@@ -59,7 +59,16 @@ async function fetchOrders(
     return [];
   }
 
-  const orderIds = orders.map((order) => order.id);
+  const scopedOrders =
+    role === 'PLANCHA' || role === 'FREIDORA'
+      ? orders.filter((order) => order.status !== 'ENTREGADO')
+      : orders;
+
+  if (scopedOrders.length === 0) {
+    return [];
+  }
+
+  const orderIds = scopedOrders.map((order) => order.id);
   let itemsQuery = supabaseAdmin.from('order_items').select('*').in('order_id', orderIds);
   if (station) {
     itemsQuery = itemsQuery.eq('station', station);
@@ -78,8 +87,8 @@ async function fetchOrders(
 
   const filteredOrders =
     role === 'PLANCHA' || role === 'FREIDORA'
-      ? orders.filter((order) => (itemsByOrder.get(order.id) ?? []).length > 0)
-      : orders;
+      ? scopedOrders.filter((order) => (itemsByOrder.get(order.id) ?? []).length > 0)
+      : scopedOrders;
 
   return filteredOrders.map((order) => ({
     ...order,
@@ -129,7 +138,9 @@ export async function POST(request: NextRequest) {
     const roleHeader = request.headers.get('x-role')?.trim();
     const userIdHeader = request.headers.get('x-user-id')?.trim();
     const isKioskRequest = !roleHeader || !userIdHeader;
-    console.log('[orders] mode:', isKioskRequest ? 'KIOSCO' : 'STAFF');
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[orders] mode:', isKioskRequest ? 'KIOSCO' : 'STAFF');
+    }
 
     if (isKioskRequest && type === 'DELIVERY') {
       return jsonError('Delivery orders require admin role', 401);

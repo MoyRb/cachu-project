@@ -23,6 +23,7 @@ const formatLastUpdated = (date: Date) =>
   })}`;
 const getVisibleOrders = (orders: Order[]) => {
   return orders
+    .filter((order) => order.status !== "ENTREGADO")
     .map((order) => ({
       ...order,
       items: order.items.filter((item) => item.station === STATION),
@@ -54,7 +55,7 @@ const ITEM_ACTIONS: Record<
   ItemStatus,
   { label: string; nextStatus: ItemStatus } | null
 > = {
-  EN_COLA: null,
+  EN_COLA: { label: "Iniciar preparación", nextStatus: "EN_PREPARACION" },
   PENDIENTE: { label: "Iniciar preparación", nextStatus: "EN_PREPARACION" },
   EN_PREPARACION: { label: "Marcar listo", nextStatus: "LISTO" },
   LISTO: null,
@@ -210,7 +211,7 @@ export default function PlanchaPage() {
               <EmptyState
                 title={emptyTitle}
                 subtitle={emptySubtitle}
-                hint="Actualiza en vivo (respaldo cada 60s)."
+                hint="Actualiza en vivo (respaldo cada 25s)."
                 lastUpdated={
                   lastChangedAt
                     ? formatLastUpdated(lastChangedAt)

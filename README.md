@@ -20,6 +20,33 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Flujo operativo (Kiosco → Cocina)
+
+### Variables de entorno (PINs de estación)
+
+Puedes configurar los PINs con variables públicas. Si no se definen, se usan los valores por defecto:
+
+- `NEXT_PUBLIC_KITCHEN_PIN_PLANCHA` (default: `1111`)
+- `NEXT_PUBLIC_KITCHEN_PIN_FREIDORA` (default: `2222`)
+- `NEXT_PUBLIC_KITCHEN_PIN_EMPAQUETADO` (default: `3333`)
+
+### Prueba rápida en UI (paso a paso)
+
+1. Inicia el servidor (`npm run dev`).
+2. Abre `/kiosco` y crea un pedido DINEIN o TAKEOUT.
+3. Confirma el pedido y verifica el mensaje “Pedido #XXX”.
+4. Abre `/cocina` y selecciona **Plancha** (PIN por defecto: `1111`).
+5. Marca los items de plancha: `EN_COLA` → `EN_PREPARACION` → `LISTO`.
+6. Selecciona **Freidora** (PIN por defecto: `2222`) y marca sus items hasta `LISTO`.
+7. Cuando todo esté listo, entra a **Empaquetado** (PIN por defecto: `3333`).
+8. Cambia el pedido a `EMPACANDO`, luego a `LISTO_PARA_ENTREGAR`.
+9. Si es DELIVERY, usa `EN_REPARTO`; en caso contrario, marca `ENTREGADO`.
+10. Verifica que el pedido desaparezca de plancha/freidora y se actualice en empaquetado.
+
+### Endpoint de salud
+
+- `GET /api/health` → responde `200 OK` con `{ status: "ok" }`.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

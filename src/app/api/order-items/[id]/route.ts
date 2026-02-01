@@ -3,6 +3,7 @@ import { ensureRole, getAuthContext } from '@/lib/auth';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
 const ITEM_STATUSES = ['EN_COLA', 'PENDIENTE', 'EN_PREPARACION', 'LISTO'] as const;
+const ORDER_READY_STATUSES = ['RECIBIDO', 'EN_PROCESO'] as const;
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
@@ -61,12 +62,23 @@ export async function PATCH(
       }
 
       if (count === 0) {
-        const { error: orderUpdateError } = await supabaseAdmin
+        const { data: order, error: orderError } = await supabaseAdmin
           .from('orders')
-          .update({ status: 'LISTO_PARA_EMPACAR', updated_at: new Date().toISOString() })
-          .eq('id', item.order_id);
-        if (orderUpdateError) {
-          throw new Error(orderUpdateError.message);
+          .select('id, status')
+          .eq('id', item.order_id)
+          .single();
+        if (orderError || !order) {
+          throw new Error(orderError?.message ?? 'Order not found');
+        }
+
+        if (ORDER_READY_STATUSES.includes(order.status)) {
+          const { error: orderUpdateError } = await supabaseAdmin
+            .from('orders')
+            .update({ status: 'LISTO_PARA_EMPACAR', updated_at: new Date().toISOString() })
+            .eq('id', item.order_id);
+          if (orderUpdateError) {
+            throw new Error(orderUpdateError.message);
+          }
         }
       }
     }

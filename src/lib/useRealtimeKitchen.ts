@@ -29,7 +29,7 @@ export function useRealtimeKitchen<T>({
   fetcher,
   signature,
   station,
-  fallbackIntervalMs = 60000,
+  fallbackIntervalMs = 25000,
 }: UseRealtimeKitchenOptions<T>) {
   const [data, setData] = useState<T | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
