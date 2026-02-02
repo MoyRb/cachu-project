@@ -52,9 +52,9 @@ const formatCurrency = (valueCents: number) =>
   }).format(valueCents / 100);
 
 const topBarLinkBase =
-  "inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-wood/60 focus-visible:ring-offset-2 focus-visible:ring-offset-cream";
-const topBarPrimaryLink = `${topBarLinkBase} h-12 px-6 text-lg bg-cta text-ink shadow-sm hover:bg-[#d88b46]`;
-const topBarSecondaryLink = `${topBarLinkBase} h-10 px-4 text-sm border border-wood/70 text-ink hover:bg-accent/60`;
+  "inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cta/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+const topBarPrimaryLink = `${topBarLinkBase} h-12 px-6 text-lg bg-cta text-on-primary shadow-sm hover:bg-cta-hover`;
+const topBarSecondaryLink = `${topBarLinkBase} h-10 px-4 text-sm border border-cta/70 text-ink hover:bg-cta/15`;
 
 export default function KioscoPage() {
   const [orderType, setOrderType] = useState<OrderType | null>(null);
@@ -284,11 +284,11 @@ export default function KioscoPage() {
 
   if (!orderType && !orderConfirmation) {
     return (
-      <div className="min-h-screen bg-cream px-6 py-10 text-ink sm:px-10">
+      <div className="min-h-screen bg-transparent px-6 py-10 text-ink sm:px-10">
         <section className="mx-auto flex w-full max-w-5xl flex-col gap-10">
           <TopBar>
             <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-ink/60">
+              <p className="text-sm font-semibold uppercase tracking-wide text-muted">
                 Kiosco local
               </p>
               <h1 className="text-4xl font-bold text-ink">Nuevo pedido</h1>
@@ -314,7 +314,7 @@ export default function KioscoPage() {
 
           <BottomActions className="gap-6">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-ink/60">
+              <p className="text-sm font-semibold uppercase tracking-wide text-muted">
                 Selección rápida
               </p>
               <p className="text-lg font-semibold">
@@ -341,11 +341,11 @@ export default function KioscoPage() {
 
   if (orderConfirmation) {
     return (
-      <div className="min-h-screen bg-cream px-6 py-10 text-ink sm:px-10">
+      <div className="min-h-screen bg-transparent px-6 py-10 text-ink sm:px-10">
         <section className="mx-auto flex w-full max-w-4xl flex-col gap-10">
           <TopBar>
             <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-ink/60">
+              <p className="text-sm font-semibold uppercase tracking-wide text-muted">
                 Pedido confirmado
               </p>
               <h1 className="text-4xl font-bold text-ink">
@@ -365,19 +365,19 @@ export default function KioscoPage() {
 
           <Card className="space-y-6 text-center">
             <div className="space-y-3">
-              <p className="text-lg font-semibold text-ink/70">
+              <p className="text-lg font-semibold text-muted">
                 Pedido #
                 {String(orderConfirmation.orderNumber).padStart(3, "0")}
               </p>
               <p className="text-6xl font-bold text-ink">
                 {String(orderConfirmation.orderNumber).padStart(3, "0")}
               </p>
-              <p className="text-base text-ink/70">
+              <p className="text-base text-muted">
                 {typeLabels[orderConfirmation.type]}
               </p>
             </div>
             <div className="text-left">
-              <p className="text-sm font-semibold uppercase tracking-wide text-ink/60">
+              <p className="text-sm font-semibold uppercase tracking-wide text-muted">
                 Resumen
               </p>
               <ul className="mt-3 space-y-2 text-base font-semibold text-ink">
@@ -398,7 +398,7 @@ export default function KioscoPage() {
 
           <BottomActions>
             <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-ink/60">
+              <p className="text-sm font-semibold uppercase tracking-wide text-muted">
                 Pedido ID
               </p>
               <p className="text-lg font-semibold">
@@ -415,15 +415,15 @@ export default function KioscoPage() {
   }
 
   return (
-    <div className="min-h-screen bg-cream px-6 py-10 text-ink sm:px-10">
+    <div className="min-h-screen bg-transparent px-6 py-10 text-ink sm:px-10">
       <section className="mx-auto flex w-full max-w-6xl flex-col gap-8">
         <TopBar>
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-ink/60">
+            <p className="text-sm font-semibold uppercase tracking-wide text-muted">
               Kiosco local
             </p>
             <h1 className="text-3xl font-bold text-ink">Menú</h1>
-            <p className="text-base font-semibold text-ink/70">
+            <p className="text-base font-semibold text-muted">
               {orderType ? typeLabels[orderType] : ""}
             </p>
           </div>
@@ -502,13 +502,13 @@ export default function KioscoPage() {
             <Card className="space-y-4">
               <div className="flex items-center justify-between">
                 <CardTitle>Carrito</CardTitle>
-                <span className="text-sm font-semibold text-ink/70">
+                <span className="text-sm font-semibold text-muted">
                   {cartCount} items
                 </span>
               </div>
 
               {cartItems.length === 0 ? (
-                <p className="text-base text-ink/70">
+                <p className="text-base text-muted">
                   Agrega productos para comenzar el pedido.
                 </p>
               ) : (
@@ -516,14 +516,14 @@ export default function KioscoPage() {
                   {cartItems.map((item) => (
                     <div
                       key={item.id}
-                      className="space-y-2 rounded-2xl border border-border/60 bg-cream/70 p-4"
+                      className="space-y-2 rounded-2xl border border-border bg-surface-2/90 p-4"
                     >
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-lg font-semibold text-ink">
                             {item.name}
                           </p>
-                          <p className="text-sm text-ink/70">
+                          <p className="text-sm text-muted">
                             {stationLabels[item.station]} •{" "}
                             {formatCurrency(item.price_cents)}
                           </p>
@@ -565,7 +565,7 @@ export default function KioscoPage() {
             <Card className="space-y-4">
               <div className="flex items-center justify-between">
                 <CardTitle>Resumen</CardTitle>
-                <span className="text-sm font-semibold text-ink/70">
+                <span className="text-sm font-semibold text-muted">
                   {orderType ? typeLabels[orderType] : ""}
                 </span>
               </div>
@@ -610,7 +610,7 @@ export default function KioscoPage() {
         <Modal>
           <ModalPanel className="max-w-2xl space-y-4">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-ink/60">
+              <p className="text-sm font-semibold uppercase tracking-wide text-muted">
                 Confirmar pedido
               </p>
               <h2 className="text-2xl font-bold text-ink">
@@ -635,7 +635,7 @@ export default function KioscoPage() {
               </div>
             </div>
             {submitError ? (
-              <p className="rounded-2xl border border-wood/40 bg-cream px-4 py-3 text-sm font-semibold text-ink">
+              <p className="rounded-2xl border border-border bg-surface-2 px-4 py-3 text-sm font-semibold text-ink">
                 {submitError}
               </p>
             ) : null}

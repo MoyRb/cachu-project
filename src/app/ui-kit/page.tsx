@@ -13,11 +13,11 @@ import { TopBar } from "@/components/ui/TopBar";
 
 export default function UIKitPage() {
   return (
-    <div className="min-h-screen bg-cream px-6 py-10 text-ink sm:px-10">
+    <div className="min-h-screen bg-transparent px-6 py-10 text-ink sm:px-10">
       <section className="mx-auto flex w-full max-w-5xl flex-col gap-10">
         <TopBar>
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-ink/60">
+            <p className="text-sm font-semibold uppercase tracking-wide text-muted">
               Cachu PWA
             </p>
             <h1 className="text-3xl font-bold text-ink">UI Kit & Tokens</h1>
@@ -32,7 +32,7 @@ export default function UIKitPage() {
             </Button>
             <Link
               href="/kiosco"
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-cta px-6 text-lg font-semibold text-ink shadow-sm transition-colors hover:bg-[#d88b46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-wood/60 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-cta px-6 text-lg font-semibold text-on-primary shadow-sm transition-colors hover:bg-cta-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cta/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               Ir a Kiosco
             </Link>
@@ -51,19 +51,19 @@ export default function UIKitPage() {
             <ul className="space-y-3 text-base font-semibold text-ink">
               <li className="flex items-start gap-3">
                 <span className="mt-1 h-2 w-2 rounded-full bg-cta" />
-                Botones principales en #E89D58 con texto oscuro.
+                Botones principales en naranja con texto oscuro.
               </li>
               <li className="flex items-start gap-3">
-                <span className="mt-1 h-2 w-2 rounded-full bg-wood" />
-                Secundarios con borde madera y fondo crema.
+                <span className="mt-1 h-2 w-2 rounded-full bg-cta/60" />
+                Secundarios con borde naranja y hover sutil.
               </li>
               <li className="flex items-start gap-3">
                 <span className="mt-1 h-2 w-2 rounded-full bg-accent" />
-                Badges y estados consistentes para cocina.
+                Badges y estados con contraste alto en dark mode.
               </li>
               <li className="flex items-start gap-3">
-                <span className="mt-1 h-2 w-2 rounded-full bg-success" />
-                Cards con sombras ligeras y esquinas grandes.
+                <span className="mt-1 h-2 w-2 rounded-full bg-surface-2" />
+                Cards oscuras con bordes sutiles y sombras suaves.
               </li>
             </ul>
           </Card>
@@ -72,14 +72,15 @@ export default function UIKitPage() {
             <CardTitle>Tokens de color</CardTitle>
             <div className="grid grid-cols-2 gap-3 text-sm font-semibold">
               {[
-                { label: "Crema", className: "bg-cream" },
-                { label: "Ink", className: "bg-ink text-cream" },
-                { label: "CTA", className: "bg-cta" },
-                { label: "Acento", className: "bg-accent" },
-                { label: "Madera", className: "bg-wood text-cream" },
+                { label: "Background", className: "bg-background" },
+                { label: "Surface", className: "bg-surface" },
+                { label: "Surface 2", className: "bg-surface-2" },
+                { label: "Text", className: "bg-ink text-background" },
+                { label: "Primary", className: "bg-cta text-on-primary" },
+                { label: "Accent", className: "bg-accent text-on-accent" },
                 { label: "Success", className: "bg-success" },
                 { label: "Info", className: "bg-info" },
-                { label: "Card", className: "bg-card" },
+                { label: "Border", className: "bg-border" },
               ].map((item) => (
                 <div
                   key={item.label}
@@ -162,7 +163,7 @@ export default function UIKitPage() {
 
         <BottomActions>
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-ink/60">
+            <p className="text-sm font-semibold uppercase tracking-wide text-muted">
               Modo kiosk
             </p>
             <p className="text-lg font-semibold">Listo para tomar pedidos</p>
@@ -180,14 +181,14 @@ export default function UIKitPage() {
             <ModalPanel>
               <div className="space-y-4">
                 <div>
-                  <p className="text-sm font-semibold uppercase tracking-wide text-ink/60">
+                  <p className="text-sm font-semibold uppercase tracking-wide text-muted">
                     Modal ejemplo
                   </p>
                   <h2 className="text-2xl font-bold text-ink">
                     Confirmar pedido #045
                   </h2>
                 </div>
-                <p className="text-base text-ink/80">
+                <p className="text-base text-muted">
                   El pedido está listo para empaquetar. ¿Deseas moverlo a la
                   estación final?
                 </p>

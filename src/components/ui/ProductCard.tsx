@@ -27,7 +27,7 @@ export function ProductCard({
   return (
     <article
       className={cn(
-        "flex flex-col gap-4 rounded-3xl border border-border bg-card/90 p-6 shadow-sm",
+        "flex flex-col gap-4 rounded-3xl border border-border bg-surface p-6 shadow-sm",
         className,
       )}
       {...props}
@@ -35,10 +35,10 @@ export function ProductCard({
       <header className="flex items-center justify-between">
         <div>
           <p className="text-xl font-semibold text-ink">{title}</p>
-          <p className="text-sm text-ink/70">{description}</p>
+          <p className="text-sm text-muted">{description}</p>
         </div>
         {tag ? (
-          <span className="rounded-full bg-accent px-3 py-1 text-xs font-semibold text-ink">
+          <span className="rounded-full bg-accent px-3 py-1 text-xs font-semibold text-on-accent">
             {tag}
           </span>
         ) : null}

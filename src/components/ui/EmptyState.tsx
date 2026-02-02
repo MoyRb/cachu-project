@@ -42,7 +42,7 @@ export function EmptyState({
       <Button size="lg" onClick={onRefresh}>
         Refrescar ahora
       </Button>
-      <div className="space-y-1 text-sm text-ink/60">
+      <div className="space-y-1 text-sm text-muted">
         {hint ? <p>{hint}</p> : null}
         {lastUpdated ? <p className="tabular-nums">{lastUpdated}</p> : null}
       </div>

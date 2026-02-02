@@ -7,10 +7,10 @@ type ButtonVariant = "primary" | "secondary" | "ghost";
 type ButtonSize = "md" | "lg" | "xl";
 
 const variantStyles: Record<ButtonVariant, string> = {
-  primary: "bg-cta text-ink shadow-sm hover:bg-[#d88b46]",
+  primary: "bg-cta text-on-primary shadow-sm hover:bg-cta-hover",
   secondary:
-    "border border-wood/70 text-ink bg-transparent hover:bg-accent/60",
-  ghost: "text-ink hover:bg-accent/70",
+    "border border-cta/70 text-ink bg-transparent hover:bg-cta/15",
+  ghost: "text-ink hover:bg-cta/15",
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
@@ -33,7 +33,7 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-wood/60 focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
+        "inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cta/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         variantStyles[variant],
         sizeStyles[size],
         className,

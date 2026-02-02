@@ -5,11 +5,11 @@ import { cn } from "@/lib/utils";
 type BadgeVariant = "new" | "prep" | "ready" | "delivery" | "urgent";
 
 const variantStyles: Record<BadgeVariant, string> = {
-  new: "bg-status-new text-ink",
-  prep: "bg-status-prep text-ink",
-  ready: "bg-status-ready text-ink",
-  delivery: "bg-status-delivery text-ink",
-  urgent: "border border-wood/70 text-ink bg-cream",
+  new: "bg-status-new text-on-accent",
+  prep: "bg-status-prep text-on-primary",
+  ready: "bg-status-ready text-on-accent",
+  delivery: "bg-status-delivery text-on-accent",
+  urgent: "border border-cta/70 text-ink bg-surface-2",
 };
 
 export type BadgeProps = HTMLAttributes<HTMLSpanElement> & {

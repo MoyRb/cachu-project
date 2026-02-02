@@ -105,11 +105,11 @@ export default function CocinaLandingPage() {
   };
 
   return (
-    <main className="min-h-screen bg-cream px-6 py-8">
+    <main className="min-h-screen bg-transparent px-6 py-8">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
         <TopBar>
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-ink/60">
+            <p className="text-sm font-semibold uppercase tracking-wide text-muted">
               Cocina
             </p>
             <h1 className="text-3xl font-bold text-ink">
@@ -139,7 +139,7 @@ export default function CocinaLandingPage() {
         <Modal>
           <ModalPanel className="space-y-6">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-ink/60">
+              <p className="text-sm font-semibold uppercase tracking-wide text-muted">
                 {selectedRole.label}
               </p>
               <h2 className="text-2xl font-bold text-ink">
@@ -148,7 +148,7 @@ export default function CocinaLandingPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-ink/70">
+              <label className="text-sm font-semibold text-muted">
                 PIN
               </label>
               <Input

@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root {
+  /* Tema clásico (legacy) */
   --cachu-cream: #fcfbe4;
   --cachu-ink: #05111b;
   --cachu-cta: #e89d58;
@@ -10,22 +11,67 @@
   --cachu-info: #80f8e8;
   --cachu-card: #fffdf1;
   --cachu-border: #dfc8b1;
+  --bg: var(--cachu-cream);
+  --surface: var(--cachu-card);
+  --surface2: #f4eddc;
+  --border: var(--cachu-border);
+  --text: var(--cachu-ink);
+  --muted: #6b5c4b;
+  --primary: var(--cachu-cta);
+  --primaryHover: #d88b46;
+  --accent: var(--cachu-accent);
+  --danger: #dc2626;
+  --on-primary: #1b1106;
+  --on-accent: #1b1106;
+}
+
+[data-theme="cachuburger"] {
+  --bg: #0b0d10;
+  --surface: #14171c;
+  --surface2: #101317;
+  --border: rgba(255, 165, 0, 0.18);
+  --text: #f7f7f7;
+  --muted: #b7bdc7;
+  --primary: #f59e0b;
+  --primaryHover: #ffb020;
+  --accent: #ffd166;
+  --danger: #f87171;
+  --on-primary: #1d1203;
+  --on-accent: #1d1203;
+  --cachu-cream: var(--bg);
+  --cachu-ink: var(--text);
+  --cachu-cta: var(--primary);
+  --cachu-accent: var(--accent);
+  --cachu-wood: #f2a23a;
+  --cachu-success: #22c55e;
+  --cachu-info: #38bdf8;
+  --cachu-card: var(--surface);
+  --cachu-border: var(--border);
 }
 
 @theme inline {
-  --color-background: var(--cachu-cream);
-  --color-foreground: var(--cachu-ink);
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
   --color-cream: var(--cachu-cream);
   --color-ink: var(--cachu-ink);
-  --color-cta: var(--cachu-cta);
-  --color-accent: var(--cachu-accent);
+  --color-cta: var(--primary);
+  --color-cta-hover: var(--primaryHover);
+  --color-accent: var(--accent);
   --color-wood: var(--cachu-wood);
   --color-success: var(--cachu-success);
   --color-info: var(--cachu-info);
-  --color-card: var(--cachu-card);
-  --color-border: var(--cachu-border);
-  --color-status-new: var(--cachu-accent);
-  --color-status-prep: var(--cachu-cta);
+  --color-card: var(--surface);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface2);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primaryHover);
+  --color-danger: var(--danger);
+  --color-on-primary: var(--on-primary);
+  --color-on-accent: var(--on-accent);
+  --color-status-new: var(--accent);
+  --color-status-prep: var(--primary);
   --color-status-ready: var(--cachu-success);
   --color-status-delivery: var(--cachu-info);
   --font-sans: var(--font-geist-sans);
@@ -33,11 +79,37 @@
 }
 
 body {
-  background: var(--cachu-cream);
-  color: var(--cachu-ink);
+  background: var(--bg);
+  color: var(--text);
   font-family: var(--font-geist-sans), "Inter", system-ui, sans-serif;
 }
 
 * {
   border-color: var(--cachu-border);
+}
+
+.app-bg {
+  position: relative;
+  min-height: 100vh;
+  isolation: isolate;
+  background-color: var(--bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='420' viewBox='0 0 420 420'%3E%3Cpolygon points='0,0 210,0 105,140' fill='%23141920' fill-opacity='0.35'/%3E%3Cpolygon points='210,0 420,0 315,140' fill='%2311171c' fill-opacity='0.35'/%3E%3Cpolygon points='105,140 210,0 315,140' fill='%23171c22' fill-opacity='0.35'/%3E%3Cpolygon points='0,0 105,140 0,280' fill='%23101317' fill-opacity='0.32'/%3E%3Cpolygon points='0,280 105,140 210,280' fill='%23161b21' fill-opacity='0.32'/%3E%3Cpolygon points='210,280 105,140 315,140' fill='%2311171c' fill-opacity='0.32'/%3E%3Cpolygon points='210,280 315,140 420,280' fill='%23151a20' fill-opacity='0.32'/%3E%3Cpolygon points='420,280 315,140 420,0' fill='%230f1318' fill-opacity='0.32'/%3E%3Cpolygon points='0,280 210,280 105,420' fill='%23141920' fill-opacity='0.3'/%3E%3Cpolygon points='210,280 420,280 315,420' fill='%2312171d' fill-opacity='0.3'/%3E%3Cpolygon points='105,420 210,280 315,420' fill='%23171c22' fill-opacity='0.3'/%3E%3C/svg%3E");
+  background-size: 420px 420px;
+  background-attachment: fixed;
+}
+
+.app-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at top, rgba(245, 158, 11, 0.12), transparent 55%),
+    radial-gradient(circle at bottom, rgba(255, 209, 102, 0.08), transparent 45%);
+  opacity: 0.14;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.app-bg > * {
+  position: relative;
+  z-index: 1;
 }
