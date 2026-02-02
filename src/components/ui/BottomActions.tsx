@@ -9,7 +9,7 @@ export function BottomActions({
   return (
     <div
       className={cn(
-        "flex flex-col gap-3 rounded-3xl border border-border bg-card/90 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between",
+        "flex flex-col gap-3 rounded-3xl border border-border bg-surface p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between",
         className,
       )}
       {...props}

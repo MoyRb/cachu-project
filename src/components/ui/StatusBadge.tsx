@@ -5,11 +5,11 @@ import { cn } from "@/lib/utils";
 type Status = "nuevo" | "en-preparacion" | "listo" | "en-reparto" | "urgente";
 
 const styles: Record<Status, string> = {
-  nuevo: "bg-status-new text-ink",
-  "en-preparacion": "bg-status-prep text-ink",
-  listo: "bg-status-ready text-ink",
-  "en-reparto": "bg-status-delivery text-ink",
-  urgente: "border border-wood/70 text-ink bg-cream",
+  nuevo: "bg-status-new text-on-accent",
+  "en-preparacion": "bg-status-prep text-on-primary",
+  listo: "bg-status-ready text-on-accent",
+  "en-reparto": "bg-status-delivery text-on-accent",
+  urgente: "border border-cta/70 text-ink bg-surface-2",
 };
 
 const labels: Record<Status, string> = {

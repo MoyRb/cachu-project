@@ -16,10 +16,10 @@ export function RoleSelector({ role, onChange, isVisible = true }: RoleSelectorP
 
   return (
     <label className="flex items-center gap-3 text-base font-semibold text-ink">
-      <span className="uppercase tracking-wide text-ink/60">Rol</span>
+      <span className="uppercase tracking-wide text-muted">Rol</span>
       <select
         className={cn(
-          "rounded-2xl border border-border bg-cream px-4 py-2 text-base font-semibold text-ink shadow-sm",
+          "rounded-2xl border border-border bg-surface-2 px-4 py-2 text-base font-semibold text-ink shadow-sm",
         )}
         value={role}
         onChange={(event) => onChange(event.target.value as KitchenRole)}

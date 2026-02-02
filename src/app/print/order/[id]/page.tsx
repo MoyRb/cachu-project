@@ -91,7 +91,7 @@ export default function PrintOrderPage() {
   }, [order]);
 
   return (
-    <main className="min-h-screen bg-white px-6 py-8 text-ink">
+    <main className="min-h-screen bg-white px-6 py-8 text-neutral-900">
       <style>{`
         @media print {
           button { display: none; }
@@ -101,10 +101,10 @@ export default function PrintOrderPage() {
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
         <header className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-ink/60">
+            <p className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
               Ticket de pedido
             </p>
-            <h1 className="text-3xl font-bold text-ink">
+            <h1 className="text-3xl font-bold text-neutral-900">
               Pedido #{order?.order_number ?? ""}
             </h1>
           </div>
@@ -114,23 +114,27 @@ export default function PrintOrderPage() {
         </header>
 
         {isLoading ? (
-          <Card>
-            <CardTitle>Cargando pedido...</CardTitle>
-            <CardDescription className="mt-2">
+          <Card className="border-neutral-200 bg-white text-neutral-900">
+            <CardTitle className="text-neutral-900">Cargando pedido...</CardTitle>
+            <CardDescription className="mt-2 text-neutral-600">
               Preparando ticket.
             </CardDescription>
           </Card>
         ) : null}
 
         {error ? (
-          <Card>
-            <CardTitle>No se pudo cargar el ticket</CardTitle>
-            <CardDescription className="mt-2">{error}</CardDescription>
+          <Card className="border-neutral-200 bg-white text-neutral-900">
+            <CardTitle className="text-neutral-900">
+              No se pudo cargar el ticket
+            </CardTitle>
+            <CardDescription className="mt-2 text-neutral-600">
+              {error}
+            </CardDescription>
           </Card>
         ) : null}
 
         {order ? (
-          <Card className="border-2 border-border bg-white">
+          <Card className="border-2 border-neutral-200 bg-white text-neutral-900">
             <div className="space-y-3 text-base">
               <p>
                 <span className="font-semibold">Tipo:</span> {formatOrderType(order.type)}
@@ -143,14 +147,14 @@ export default function PrintOrderPage() {
               </p>
             </div>
 
-            <div className="mt-6 border-t border-border pt-4">
+            <div className="mt-6 border-t border-neutral-200 pt-4">
               <p className="text-lg font-semibold">Items</p>
               <ul className="mt-3 space-y-2">
                 {order.items.map((item) => (
                   <li key={item.id} className="flex items-start justify-between">
                     <div>
                       <p className="font-semibold">{item.name_snapshot}</p>
-                      <p className="text-sm text-ink/70">
+                      <p className="text-sm text-neutral-600">
                         {item.station} · x{item.qty}
                       </p>
                     </div>
@@ -162,7 +166,7 @@ export default function PrintOrderPage() {
               </ul>
             </div>
 
-            <div className="mt-6 border-t border-border pt-4 text-base">
+            <div className="mt-6 border-t border-neutral-200 pt-4 text-base">
               <div className="flex items-center justify-between">
                 <span>Subtotal</span>
                 <span className="font-semibold">{formatCurrency(subtotal)}</span>
@@ -186,9 +190,9 @@ export default function PrintOrderPage() {
             </div>
 
             {order.notes ? (
-              <div className="mt-6 border-t border-border pt-4">
+              <div className="mt-6 border-t border-neutral-200 pt-4">
                 <p className="text-base font-semibold">Notas</p>
-                <p className="mt-2 text-sm text-ink/70">{order.notes}</p>
+                <p className="mt-2 text-sm text-neutral-600">{order.notes}</p>
               </div>
             ) : null}
           </Card>
