@@ -64,6 +64,7 @@ export default function KioscoPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [orderNotes, setOrderNotes] = useState("");
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [isCartSheetOpen, setIsCartSheetOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [orderConfirmation, setOrderConfirmation] = useState<{
@@ -216,6 +217,12 @@ export default function KioscoPage() {
     setOrderConfirmation(null);
     setSubmitError(null);
     setIsConfirmOpen(false);
+    setIsCartSheetOpen(false);
+  };
+
+  const handleClearCart = () => {
+    setCartItems([]);
+    setSubmitError(null);
   };
 
   const handleSubmitOrder = async () => {
@@ -264,6 +271,7 @@ export default function KioscoPage() {
       setCartItems([]);
       setOrderNotes("");
       setIsConfirmOpen(false);
+      setIsCartSheetOpen(false);
     } catch (error) {
       setSubmitError(
         error instanceof Error
@@ -275,11 +283,9 @@ export default function KioscoPage() {
     }
   };
 
-  const handleScrollToCart = () => {
-    const target = document.getElementById("kiosco-cart");
-    if (target) {
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+  const handleOpenConfirm = () => {
+    setIsConfirmOpen(true);
+    setIsCartSheetOpen(false);
   };
 
   if (!orderType && !orderConfirmation) {
@@ -414,8 +420,59 @@ export default function KioscoPage() {
     );
   }
 
+  const cartItemsContent =
+    cartItems.length === 0 ? (
+      <p className="text-base text-muted">
+        Agrega productos para comenzar el pedido.
+      </p>
+    ) : (
+      <div className="space-y-4">
+        {cartItems.map((item) => (
+          <div
+            key={item.id}
+            className="space-y-2 rounded-2xl border border-border bg-surface-2/90 p-4"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-lg font-semibold text-ink">{item.name}</p>
+                <p className="text-sm text-muted">
+                  {stationLabels[item.station]} •{" "}
+                  {formatCurrency(item.price_cents)}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="md"
+                  variant="secondary"
+                  onClick={() => handleQtyChange(item.id, -1)}
+                  type="button"
+                >
+                  -
+                </Button>
+                <span className="text-lg font-semibold">{item.qty}</span>
+                <Button
+                  size="md"
+                  onClick={() => handleQtyChange(item.id, 1)}
+                  type="button"
+                >
+                  +
+                </Button>
+              </div>
+            </div>
+            <Input
+              placeholder="Notas para este item"
+              value={item.notes}
+              onChange={(event) =>
+                handleNoteChange(item.id, event.target.value)
+              }
+            />
+          </div>
+        ))}
+      </div>
+    );
+
   return (
-    <div className="min-h-screen bg-transparent px-6 py-10 text-ink sm:px-10">
+    <div className="min-h-screen bg-transparent px-6 pb-28 pt-10 text-ink sm:px-10 md:pb-10">
       <section className="mx-auto flex w-full max-w-6xl flex-col gap-8">
         <TopBar>
           <div>
@@ -446,7 +503,7 @@ export default function KioscoPage() {
           </div>
         </TopBar>
 
-        <div className="grid gap-6 xl:grid-cols-[1.6fr_0.9fr]">
+        <div className="grid gap-6 md:grid-cols-[1.6fr_0.9fr]">
           <section className="space-y-8">
             <Card className="space-y-2">
               <CardTitle>Selecciona productos</CardTitle>
@@ -498,68 +555,20 @@ export default function KioscoPage() {
             )}
           </section>
 
-          <aside id="kiosco-cart" className="space-y-6">
-            <Card className="space-y-4">
+          <aside
+            id="kiosco-cart"
+            className="hidden md:sticky md:top-[72px] md:flex md:max-h-[calc(100vh-96px)] md:flex-col md:gap-6"
+          >
+            <Card className="flex min-h-0 flex-1 flex-col space-y-4">
               <div className="flex items-center justify-between">
                 <CardTitle>Carrito</CardTitle>
                 <span className="text-sm font-semibold text-muted">
                   {cartCount} items
                 </span>
               </div>
-
-              {cartItems.length === 0 ? (
-                <p className="text-base text-muted">
-                  Agrega productos para comenzar el pedido.
-                </p>
-              ) : (
-                <div className="space-y-4">
-                  {cartItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className="space-y-2 rounded-2xl border border-border bg-surface-2/90 p-4"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-lg font-semibold text-ink">
-                            {item.name}
-                          </p>
-                          <p className="text-sm text-muted">
-                            {stationLabels[item.station]} •{" "}
-                            {formatCurrency(item.price_cents)}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="md"
-                            variant="secondary"
-                            onClick={() => handleQtyChange(item.id, -1)}
-                            type="button"
-                          >
-                            -
-                          </Button>
-                          <span className="text-lg font-semibold">
-                            {item.qty}
-                          </span>
-                          <Button
-                            size="md"
-                            onClick={() => handleQtyChange(item.id, 1)}
-                            type="button"
-                          >
-                            +
-                          </Button>
-                        </div>
-                      </div>
-                      <Input
-                        placeholder="Notas para este item"
-                        value={item.notes}
-                        onChange={(event) =>
-                          handleNoteChange(item.id, event.target.value)
-                        }
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="min-h-0 space-y-4 overflow-y-auto pr-2">
+                {cartItemsContent}
+              </div>
             </Card>
 
             <Card className="space-y-4">
@@ -584,30 +593,147 @@ export default function KioscoPage() {
                 value={orderNotes}
                 onChange={(event) => setOrderNotes(event.target.value)}
               />
-              <Button
-                size="xl"
-                onClick={() => setIsConfirmOpen(true)}
-                disabled={cartItems.length === 0}
-              >
-                Confirmar pedido
-              </Button>
+              {submitError ? (
+                <p className="rounded-2xl border border-border bg-surface-2 px-4 py-3 text-sm font-semibold text-ink">
+                  {submitError}
+                </p>
+              ) : null}
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  size="xl"
+                  onClick={handleOpenConfirm}
+                  disabled={cartItems.length === 0}
+                >
+                  Confirmar pedido
+                </Button>
+                {cartItems.length > 0 ? (
+                  <Button
+                    size="xl"
+                    variant="secondary"
+                    onClick={handleClearCart}
+                    type="button"
+                  >
+                    Vaciar
+                  </Button>
+                ) : null}
+              </div>
             </Card>
           </aside>
         </div>
       </section>
 
-      {cartItems.length > 0 ? (
-        <Button
-          size="lg"
-          className="fixed bottom-6 right-6 z-40 shadow-lg xl:hidden"
-          onClick={handleScrollToCart}
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur md:hidden">
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+              Carrito
+            </p>
+            <p className="text-sm font-semibold text-ink">
+              {cartCount} items · {formatCurrency(subtotalCents)}
+            </p>
+          </div>
+          <Button
+            size="lg"
+            className="relative"
+            onClick={() => setIsCartSheetOpen(true)}
+            disabled={cartItems.length === 0}
+          >
+            Ver carrito
+            <span className="absolute -right-2 -top-2 inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-cta px-2 text-xs font-bold text-on-primary">
+              {cartCount}
+            </span>
+          </Button>
+        </div>
+      </div>
+
+      {isCartSheetOpen ? (
+        <Modal
+          onClose={() => setIsCartSheetOpen(false)}
+          className="items-end p-4 md:hidden"
         >
-          Ver carrito ({cartCount})
-        </Button>
+          <ModalPanel className="max-w-lg rounded-b-none rounded-t-3xl p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-wide text-muted">
+                  Tu carrito
+                </p>
+                <h2 className="text-2xl font-bold text-ink">Revisa tu orden</h2>
+              </div>
+              <Button
+                size="md"
+                variant="secondary"
+                onClick={() => setIsCartSheetOpen(false)}
+                type="button"
+                aria-label="Cerrar carrito"
+              >
+                X
+              </Button>
+            </div>
+            <div className="mt-6 space-y-6">
+              <Card className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle>Carrito</CardTitle>
+                  <span className="text-sm font-semibold text-muted">
+                    {cartCount} items
+                  </span>
+                </div>
+                {cartItemsContent}
+              </Card>
+
+              <Card className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle>Resumen</CardTitle>
+                  <span className="text-sm font-semibold text-muted">
+                    {orderType ? typeLabels[orderType] : ""}
+                  </span>
+                </div>
+                <div className="space-y-2 text-base text-ink">
+                  <div className="flex items-center justify-between">
+                    <span>Subtotal</span>
+                    <span>{formatCurrency(subtotalCents)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xl font-bold">
+                    <span>Total</span>
+                    <span>{formatCurrency(subtotalCents)}</span>
+                  </div>
+                </div>
+                <Input
+                  placeholder="Notas generales del pedido"
+                  value={orderNotes}
+                  onChange={(event) => setOrderNotes(event.target.value)}
+                />
+                {submitError ? (
+                  <p className="rounded-2xl border border-border bg-surface-2 px-4 py-3 text-sm font-semibold text-ink">
+                    {submitError}
+                  </p>
+                ) : null}
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    size="xl"
+                    onClick={handleOpenConfirm}
+                    disabled={cartItems.length === 0}
+                  >
+                    Confirmar pedido
+                  </Button>
+                  {cartItems.length > 0 ? (
+                    <Button
+                      size="xl"
+                      variant="secondary"
+                      onClick={handleClearCart}
+                      type="button"
+                    >
+                      Vaciar
+                    </Button>
+                  ) : null}
+                </div>
+              </Card>
+            </div>
+          </ModalPanel>
+        </Modal>
       ) : null}
 
       {isConfirmOpen ? (
-        <Modal>
+        <Modal onClose={() => setIsConfirmOpen(false)}>
           <ModalPanel className="max-w-2xl space-y-4">
             <div>
               <p className="text-sm font-semibold uppercase tracking-wide text-muted">
