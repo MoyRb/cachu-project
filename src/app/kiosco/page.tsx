@@ -22,6 +22,7 @@ type Product = {
   price_cents: number;
   station: Station;
   is_available: boolean;
+  image_url?: string | null;
   category?: { name?: string | null } | string | null;
 };
 
@@ -545,6 +546,7 @@ export default function KioscoPage() {
                         description={product.description ?? "Sin descripción"}
                         price={formatCurrency(product.price_cents)}
                         tag={stationLabels[product.station]}
+                        imageUrl={product.image_url}
                         onAction={() => handleAddItem(product)}
                         actionLabel="Agregar"
                       />
