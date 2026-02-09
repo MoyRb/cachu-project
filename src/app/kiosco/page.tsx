@@ -27,7 +27,8 @@ type Product = {
 };
 
 type CartItem = {
-  id: number;
+  lineId: string;
+  productId: number;
   name: string;
   price_cents: number;
   station: Station;
@@ -52,6 +53,11 @@ const formatCurrency = (valueCents: number) =>
     maximumFractionDigits: 0,
   }).format(valueCents / 100);
 
+const createLineId = () =>
+  typeof globalThis.crypto?.randomUUID === "function"
+    ? globalThis.crypto.randomUUID()
+    : `line-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
 const topBarLinkBase =
   "inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cta/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 const topBarPrimaryLink = `${topBarLinkBase} h-12 px-6 text-lg bg-cta text-on-primary shadow-sm hover:bg-cta-hover`;
@@ -68,6 +74,8 @@ export default function KioscoPage() {
   const [isCartSheetOpen, setIsCartSheetOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [activeNoteItem, setActiveNoteItem] = useState<CartItem | null>(null);
   const [orderConfirmation, setOrderConfirmation] = useState<{
     orderNumber: number;
     orderId: string;
@@ -175,16 +183,21 @@ export default function KioscoPage() {
 
   const handleAddItem = (product: Product) => {
     setCartItems((prev) => {
-      const existing = prev.find((item) => item.id === product.id);
+      const existing = prev.find(
+        (item) => item.productId === product.id && item.notes.trim() === "",
+      );
       if (existing) {
         return prev.map((item) =>
-          item.id === product.id ? { ...item, qty: item.qty + 1 } : item,
+          item.lineId === existing.lineId
+            ? { ...item, qty: item.qty + 1 }
+            : item,
         );
       }
       return [
         ...prev,
         {
-          id: product.id,
+          lineId: createLineId(),
+          productId: product.id,
           name: product.name,
           price_cents: product.price_cents,
           station: product.station,
@@ -195,20 +208,38 @@ export default function KioscoPage() {
     });
   };
 
-  const handleQtyChange = (id: number, delta: number) => {
+  const handleQtyChange = (lineId: string, delta: number) => {
     setCartItems((prev) =>
       prev
         .map((item) =>
-          item.id === id ? { ...item, qty: item.qty + delta } : item,
+          item.lineId === lineId ? { ...item, qty: item.qty + delta } : item,
         )
         .filter((item) => item.qty > 0),
     );
   };
 
-  const handleNoteChange = (id: number, value: string) => {
+  const handleOpenNoteModal = (item: CartItem) => {
+    setActiveNoteItem(item);
+    setNoteDraft(item.notes);
+  };
+
+  const handleCloseNoteModal = () => {
+    setActiveNoteItem(null);
+    setNoteDraft("");
+  };
+
+  const handleSaveNote = () => {
+    if (!activeNoteItem) {
+      return;
+    }
     setCartItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, notes: value } : item)),
+      prev.map((item) =>
+        item.lineId === activeNoteItem.lineId
+          ? { ...item, notes: noteDraft }
+          : item,
+      ),
     );
+    handleCloseNoteModal();
   };
 
   const handleResetOrder = () => {
@@ -243,7 +274,7 @@ export default function KioscoPage() {
           customer_phone: null,
           notes: orderNotes.trim() || null,
           items: cartItems.map((item) => ({
-            product_id: item.id,
+            product_id: item.productId,
             name_snapshot: item.name,
             price_cents_snapshot: item.price_cents,
             qty: item.qty,
@@ -390,7 +421,7 @@ export default function KioscoPage() {
               <ul className="mt-3 space-y-2 text-base font-semibold text-ink">
                 {orderConfirmation.items.map((item) => (
                   <li
-                    key={item.id}
+                    key={item.lineId}
                     className="flex items-center justify-between"
                   >
                     <span>
@@ -430,7 +461,7 @@ export default function KioscoPage() {
       <div className="space-y-4">
         {cartItems.map((item) => (
           <div
-            key={item.id}
+            key={item.lineId}
             className="space-y-2 rounded-2xl border border-border bg-surface-2/90 p-4"
           >
             <div className="flex items-center justify-between">
@@ -445,7 +476,7 @@ export default function KioscoPage() {
                 <Button
                   size="md"
                   variant="secondary"
-                  onClick={() => handleQtyChange(item.id, -1)}
+                  onClick={() => handleQtyChange(item.lineId, -1)}
                   type="button"
                 >
                   -
@@ -453,20 +484,28 @@ export default function KioscoPage() {
                 <span className="text-lg font-semibold">{item.qty}</span>
                 <Button
                   size="md"
-                  onClick={() => handleQtyChange(item.id, 1)}
+                  onClick={() => handleQtyChange(item.lineId, 1)}
                   type="button"
                 >
                   +
                 </Button>
               </div>
             </div>
-            <Input
-              placeholder="Notas para este item"
-              value={item.notes}
-              onChange={(event) =>
-                handleNoteChange(item.id, event.target.value)
-              }
-            />
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                size="md"
+                variant="secondary"
+                type="button"
+                onClick={() => handleOpenNoteModal(item)}
+              >
+                {item.notes.trim().length > 0 ? "Editar nota" : "Agregar nota"}
+              </Button>
+              {item.notes.trim().length > 0 ? (
+                <span className="text-sm text-muted">
+                  Nota: {item.notes}
+                </span>
+              ) : null}
+            </div>
           </div>
         ))}
       </div>
@@ -748,7 +787,7 @@ export default function KioscoPage() {
             <div className="space-y-2 text-base text-ink">
               {cartItems.map((item) => (
                 <div
-                  key={item.id}
+                  key={item.lineId}
                   className="flex items-center justify-between"
                 >
                   <span>
@@ -782,6 +821,39 @@ export default function KioscoPage() {
                 disabled={isSubmitting}
               >
                 Revisar
+              </Button>
+            </div>
+          </ModalPanel>
+        </Modal>
+      ) : null}
+
+      {activeNoteItem ? (
+        <Modal onClose={handleCloseNoteModal}>
+          <ModalPanel className="max-w-lg space-y-4">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-muted">
+                Nota del producto
+              </p>
+              <h2 className="text-2xl font-bold text-ink">
+                {activeNoteItem.name}
+              </h2>
+            </div>
+            <Input
+              placeholder="Ej. sin cebolla, sin jitomate"
+              value={noteDraft}
+              onChange={(event) => setNoteDraft(event.target.value)}
+            />
+            <div className="flex flex-wrap gap-3">
+              <Button size="lg" onClick={handleSaveNote} type="button">
+                Guardar nota
+              </Button>
+              <Button
+                size="lg"
+                variant="secondary"
+                onClick={handleCloseNoteModal}
+                type="button"
+              >
+                Cancelar
               </Button>
             </div>
           </ModalPanel>
