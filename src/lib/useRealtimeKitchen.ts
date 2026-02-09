@@ -19,7 +19,6 @@ type UseRealtimeKitchenOptions<T> = {
   fetcher: OrdersFetcher<T>;
   signature?: (data: T) => string;
   station?: "PLANCHA" | "FREIDORA";
-  fallbackIntervalMs?: number;
 };
 
 export function useRealtimeKitchen<T>({
@@ -29,7 +28,6 @@ export function useRealtimeKitchen<T>({
   fetcher,
   signature,
   station,
-  fallbackIntervalMs = 25000,
 }: UseRealtimeKitchenOptions<T>) {
   const [data, setData] = useState<T | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -41,7 +39,6 @@ export function useRealtimeKitchen<T>({
   const mountedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const signatureRef = useRef<string | null>(null);
-  const pollerRef = useRef<number | null>(null);
 
   const runFetch = useCallback(async () => {
     if (!enabled || isFetchingRef.current) {
@@ -147,16 +144,6 @@ export function useRealtimeKitchen<T>({
       },
       refreshFromRealtime,
     );
-    channel.on(
-      "postgres_changes",
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "order_items",
-        filter: station ? `station=eq.${station}` : undefined,
-      },
-      refreshFromRealtime,
-    );
 
     channel.subscribe((status) => {
       if (!mountedRef.current) {
@@ -194,28 +181,6 @@ export function useRealtimeKitchen<T>({
       supabaseBrowser.removeChannel(channel);
     };
   }, [enabled, role, runFetch, station, userId]);
-
-  useEffect(() => {
-    if (!enabled || realtimeStatus !== "fallback") {
-      if (pollerRef.current) {
-        window.clearInterval(pollerRef.current);
-        pollerRef.current = null;
-      }
-      return;
-    }
-
-    void runFetch();
-    pollerRef.current = window.setInterval(() => {
-      void runFetch();
-    }, fallbackIntervalMs);
-
-    return () => {
-      if (pollerRef.current) {
-        window.clearInterval(pollerRef.current);
-        pollerRef.current = null;
-      }
-    };
-  }, [enabled, fallbackIntervalMs, realtimeStatus, runFetch]);
 
   return {
     data,

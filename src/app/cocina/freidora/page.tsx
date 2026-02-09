@@ -221,7 +221,7 @@ export default function FreidoraPage() {
                 Sincronizando...
               </span>
               <span className="rounded-full border border-border bg-surface-2 px-3 py-1 text-[11px] font-semibold text-muted">
-                {realtimeStatus === "connected" ? "En vivo" : "Modo respaldo"}
+                {realtimeStatus === "connected" ? "En vivo" : "Sin conexión"}
               </span>
             </div>
           </div>
@@ -233,7 +233,7 @@ export default function FreidoraPage() {
               <EmptyState
                 title={emptyTitle}
                 subtitle={emptySubtitle}
-                hint="Actualiza en vivo (respaldo cada 25s)."
+                hint="Actualiza en vivo con Supabase Realtime."
                 lastUpdated={
                   lastChangedAt
                     ? formatLastUpdated(lastChangedAt)
