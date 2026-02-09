@@ -111,13 +111,15 @@ export function useRealtimeKitchen<T>({
 
     const handleOrdersChange = (payload: {
       eventType: string;
-      new?: { status?: string };
-      old?: { status?: string };
+      new?: { status?: string; payment_status?: string | null };
+      old?: { status?: string; payment_status?: string | null };
     }) => {
       if (payload.eventType === "UPDATE") {
         const nextStatus = payload.new?.status;
         const prevStatus = payload.old?.status;
-        if (nextStatus === prevStatus) {
+        const nextPayment = payload.new?.payment_status;
+        const prevPayment = payload.old?.payment_status;
+        if (nextStatus === prevStatus && nextPayment === prevPayment) {
           return;
         }
       }

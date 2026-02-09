@@ -11,6 +11,8 @@ export type OrderType = "DINEIN" | "TAKEOUT" | "DELIVERY";
 
 export type ItemStatus = "EN_COLA" | "PENDIENTE" | "EN_PREPARACION" | "LISTO";
 
+export type PaymentStatus = "AWAITING_PAYMENT" | "PAID" | "CANCELLED";
+
 export type OrderItem = {
   id: number | string;
   order_item_id?: number | string;
@@ -22,14 +24,19 @@ export type OrderItem = {
   notes?: string | null;
   station: "PLANCHA" | "FREIDORA";
   created_at?: string;
+  updated_at?: string;
 };
 
 export type Order = {
   id: number;
   order_number: number;
   created_at: string;
+  updated_at?: string;
   status: OrderStatus;
   type: OrderType;
+  payment_status?: PaymentStatus | null;
+  paid_at?: string | null;
+  paid_by?: string | null;
   notes?: string | null;
   customer_name?: string | null;
   customer_phone?: string | null;

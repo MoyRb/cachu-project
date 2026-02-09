@@ -12,6 +12,7 @@ const ORDER_STATUSES = [
   'ENTREGADO'
 ] as const;
 const ORDER_TYPES = ['DINEIN', 'TAKEOUT', 'DELIVERY'] as const;
+const PAYMENT_STATUSES = ['AWAITING_PAYMENT', 'PAID', 'CANCELLED'] as const;
 const ITEM_STATIONS = ['PLANCHA', 'FREIDORA'] as const;
 const ITEM_STATUSES = ['EN_COLA', 'PENDIENTE', 'EN_PREPARACION', 'LISTO'] as const;
 
@@ -38,7 +39,12 @@ async function fetchOrders(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   role: Role,
   station: string | null,
-  filters: { status?: string | null; type?: string | null; date?: string | null }
+  filters: {
+    status?: string | null;
+    type?: string | null;
+    date?: string | null;
+    paymentStatus?: string | null;
+  }
 ) {
   let query = supabase.from('orders').select('*').order('created_at', { ascending: false });
   if (filters.status) {
@@ -49,6 +55,9 @@ async function fetchOrders(
   }
   if (filters.date) {
     query = query.eq('order_date', filters.date);
+  }
+  if (filters.paymentStatus) {
+    query = query.eq('payment_status', filters.paymentStatus);
   }
 
   const { data: orders, error } = await query;
@@ -117,6 +126,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const type = searchParams.get('type');
     const date = searchParams.get('date');
+    const paymentStatus = searchParams.get('payment_status');
 
     if (status && !ORDER_STATUSES.includes(status as typeof ORDER_STATUSES[number])) {
       return jsonError('Invalid status filter');
@@ -124,10 +134,21 @@ export async function GET(request: NextRequest) {
     if (type && !ORDER_TYPES.includes(type as typeof ORDER_TYPES[number])) {
       return jsonError('Invalid type filter');
     }
+    if (
+      paymentStatus &&
+      !PAYMENT_STATUSES.includes(paymentStatus as typeof PAYMENT_STATUSES[number])
+    ) {
+      return jsonError('Invalid payment status filter');
+    }
 
     const station =
       auth.role === 'PLANCHA' ? 'PLANCHA' : auth.role === 'FREIDORA' ? 'FREIDORA' : null;
-    const orders = await fetchOrders(supabase, auth.role, station, { status, type, date });
+    const orders = await fetchOrders(supabase, auth.role, station, {
+      status,
+      type,
+      date,
+      paymentStatus,
+    });
 
     return NextResponse.json(toJsonSafe({ orders }));
   } catch (error) {
