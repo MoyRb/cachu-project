@@ -23,7 +23,10 @@ const formatLastUpdated = (date: Date) =>
   })}`;
 const getVisibleOrders = (orders: Order[]) => {
   return orders
-    .filter((order) => order.status !== "ENTREGADO")
+    .filter(
+      (order) =>
+        order.status !== "ENTREGADO" && order.payment_status === "PAID",
+    )
     .map((order) => ({
       ...order,
       items: order.items.filter((item) => item.station === STATION),
@@ -55,6 +58,7 @@ const getOrdersSignature = (orders: Order[]) =>
     getVisibleOrders(orders).map((order) => ({
       id: order.id,
       status: order.status,
+      payment_status: order.payment_status,
       updated_at: order.updated_at,
       items: order.items
         .map((item) => ({
