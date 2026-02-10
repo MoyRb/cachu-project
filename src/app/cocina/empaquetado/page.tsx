@@ -3,11 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { AwaitingPaymentBanner } from "@/components/kitchen/AwaitingPaymentBanner";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TopBar } from "@/components/ui/TopBar";
 import { useKitchenRole } from "@/hooks/useKitchenRole";
+import { useAwaitingPaymentCount } from "@/hooks/useAwaitingPaymentCount";
 import {
   formatElapsed,
   formatItemStatus,
@@ -113,6 +115,11 @@ export default function EmpaquetadoPage() {
   const { role, userId, hasSession, isReady, clearSession } =
     useKitchenRole("EMPAQUETADO");
   const [actionError, setActionError] = useState<string | null>(null);
+  const { awaitingPaymentCount } = useAwaitingPaymentCount({
+    role,
+    userId,
+    enabled: isReady && hasSession,
+  });
   const [actionOrderId, setActionOrderId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -251,6 +258,10 @@ export default function EmpaquetadoPage() {
             </div>
           </div>
         </TopBar>
+
+        {awaitingPaymentCount > 0 ? (
+          <AwaitingPaymentBanner count={awaitingPaymentCount} />
+        ) : null}
 
         <section className="space-y-6">
           {isEmpty ? (

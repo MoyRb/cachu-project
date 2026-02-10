@@ -3,11 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { AwaitingPaymentBanner } from "@/components/kitchen/AwaitingPaymentBanner";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TopBar } from "@/components/ui/TopBar";
 import { useKitchenRole } from "@/hooks/useKitchenRole";
+import { useAwaitingPaymentCount } from "@/hooks/useAwaitingPaymentCount";
 import { formatElapsed, formatItemStatus } from "@/lib/kitchen/format";
 import { kitchenFetch } from "@/lib/kitchen/fetch";
 import type { ItemStatus, Order } from "@/lib/kitchen/types";
@@ -88,6 +90,11 @@ export default function PlanchaPage() {
   const [actionItemId, setActionItemId] = useState<string | number | null>(
     null,
   );
+  const { awaitingPaymentCount } = useAwaitingPaymentCount({
+    role,
+    userId,
+    enabled: isReady && hasSession,
+  });
 
   useEffect(() => {
     if (isReady && !hasSession) {
@@ -230,6 +237,10 @@ export default function PlanchaPage() {
             </div>
           </div>
         </TopBar>
+
+        {awaitingPaymentCount > 0 ? (
+          <AwaitingPaymentBanner count={awaitingPaymentCount} />
+        ) : null}
 
         <section className="space-y-6">
           {isEmpty ? (
