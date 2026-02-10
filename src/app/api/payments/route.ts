@@ -14,6 +14,7 @@ export async function POST(request: NextRequest) {
     const orderId = payload?.order_id;
     const amountCents = payload?.amount_cents;
     const method = String(payload?.method ?? 'cash').trim() || 'cash';
+    const provider = method;
 
     if (!orderId) {
       return jsonError('Order id is required');
@@ -29,6 +30,7 @@ export async function POST(request: NextRequest) {
       order_id: orderId,
       amount_cents: amountCents,
       method,
+      provider,
     });
     if (paymentError) {
       throw new Error(paymentError.message);
