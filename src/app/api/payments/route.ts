@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { ensureRole, getAuthContext } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 function jsonError(message: string, status = 400) {
@@ -10,8 +9,6 @@ function jsonError(message: string, status = 400) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
-    const auth = getAuthContext(request);
-    ensureRole(auth.role, ['ADMIN']);
 
     const payload = await request.json();
     const orderId = payload?.order_id;
@@ -22,7 +19,10 @@ export async function POST(request: NextRequest) {
       return jsonError('Order id is required');
     }
     if (!Number.isInteger(amountCents) || amountCents <= 0) {
-      return jsonError('Amount is required');
+      return jsonError('amount_cents must be a positive integer');
+    }
+    if (!method) {
+      return jsonError('method is required');
     }
 
     const { error: paymentError } = await supabase.from('payments').insert({
@@ -49,8 +49,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, order });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unauthorized';
-    const status = message === 'Forbidden' ? 403 : 401;
+    const message = error instanceof Error ? error.message : 'Unexpected error';
+    const status = message.includes('required') || message.includes('must be') ? 400 : 500;
     return jsonError(message, status);
   }
 }
