@@ -86,10 +86,14 @@ export default function KioscoPage() {
   useEffect(() => {
     let isMounted = true;
 
-    async function loadProducts() {
+    async function loadProducts(showLoading: boolean) {
       try {
-        setIsLoadingProducts(true);
-        const response = await fetch("/api/products");
+        if (showLoading) {
+          setIsLoadingProducts(true);
+        }
+        const response = await fetch("/api/products", {
+          cache: "no-store",
+        });
         const payload = await response.json();
         if (!response.ok) {
           throw new Error(payload?.error ?? "No se pudieron cargar productos.");
@@ -107,16 +111,21 @@ export default function KioscoPage() {
           );
         }
       } finally {
-        if (isMounted) {
+        if (isMounted && showLoading) {
           setIsLoadingProducts(false);
         }
       }
     }
 
-    void loadProducts();
+    void loadProducts(true);
+
+    const refreshInterval = window.setInterval(() => {
+      void loadProducts(false);
+    }, 30_000);
 
     return () => {
       isMounted = false;
+      window.clearInterval(refreshInterval);
     };
   }, []);
 
