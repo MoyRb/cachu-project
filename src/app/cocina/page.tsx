@@ -118,7 +118,7 @@ export default function CocinaLandingPage() {
           </div>
         </TopBar>
 
-        <section className="grid gap-6 md:grid-cols-3">
+        <section className="grid gap-6 md:grid-cols-4">
           {ROLE_OPTIONS.map((option) => (
             <Card key={option.role} className="flex h-full flex-col">
               <CardTitle className="text-2xl">{option.label}</CardTitle>
@@ -132,6 +132,18 @@ export default function CocinaLandingPage() {
               </div>
             </Card>
           ))}
+
+          <Card className="flex h-full flex-col">
+            <CardTitle className="text-2xl">Caja</CardTitle>
+            <CardDescription className="mt-2 text-base">
+              Cobrar pedidos y liberar a cocina
+            </CardDescription>
+            <div className="mt-6 flex flex-1 items-end">
+              <Button size="xl" className="w-full" onClick={() => router.push("/caja")}>
+                Entrar a Caja
+              </Button>
+            </div>
+          </Card>
         </section>
       </div>
 
