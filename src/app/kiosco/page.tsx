@@ -34,6 +34,33 @@ type CartItem = {
   station: Station;
   qty: number;
   notes: string;
+  isAlitas: boolean;
+};
+
+const ALITAS_FLAVORS = [
+  "Mango Habanero",
+  "BBQ",
+  "BBQ HOT",
+  "Tamarindo HOT",
+  "Lemon Pepper",
+] as const;
+
+const buildFlavorNote = (flavor: string) => `Sabor: ${flavor}`;
+
+const isAlitasProduct = (product: Product) => {
+  const categoryName =
+    typeof product.category === "string"
+      ? product.category
+      : product.category?.name ?? "";
+
+  const normalizedCategory = categoryName.trim().toLowerCase();
+  const normalizedName = product.name.trim().toLowerCase();
+
+  if (normalizedCategory === "alitas") {
+    return true;
+  }
+
+  return normalizedName.startsWith("alitas") || normalizedName.includes("alitas");
 };
 
 const stationLabels: Record<Station, string> = {
@@ -76,6 +103,12 @@ export default function KioscoPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [activeNoteItem, setActiveNoteItem] = useState<CartItem | null>(null);
+  const [alitasSelectorState, setAlitasSelectorState] = useState<{
+    mode: "add" | "edit";
+    product: Product | null;
+    productName: string | null;
+    lineId: string | null;
+  }>({ mode: "add", product: null, productName: null, lineId: null });
   const [orderConfirmation, setOrderConfirmation] = useState<{
     orderNumber: number;
     orderId: string;
@@ -186,7 +219,90 @@ export default function KioscoPage() {
     [cartItems],
   );
 
+  const handleAddAlitasWithFlavor = (product: Product, flavor: string) => {
+    const notes = buildFlavorNote(flavor);
+
+    setCartItems((prev) => {
+      const existing = prev.find(
+        (item) => item.productId === product.id && item.notes.trim() === notes,
+      );
+
+      if (existing) {
+        return prev.map((item) =>
+          item.lineId === existing.lineId ? { ...item, qty: item.qty + 1 } : item,
+        );
+      }
+
+      return [
+        ...prev,
+        {
+          lineId: createLineId(),
+          productId: product.id,
+          name: product.name,
+          price_cents: product.price_cents,
+          station: product.station,
+          qty: 1,
+          notes,
+          isAlitas: true,
+        },
+      ];
+    });
+  };
+
+  const openAlitasSelectorForAdd = (product: Product) => {
+    setAlitasSelectorState({
+      mode: "add",
+      product,
+      productName: product.name,
+      lineId: null,
+    });
+  };
+
+  const openAlitasSelectorForEdit = (item: CartItem) => {
+    const product = products.find((productItem) => productItem.id === item.productId) ?? null;
+
+    setAlitasSelectorState({
+      mode: "edit",
+      product,
+      productName: item.name,
+      lineId: item.lineId,
+    });
+  };
+
+  const closeAlitasSelector = () => {
+    setAlitasSelectorState({
+      mode: "add",
+      product: null,
+      productName: null,
+      lineId: null,
+    });
+  };
+
+  const handleSelectAlitasFlavor = (flavor: string) => {
+    const notes = buildFlavorNote(flavor);
+
+    if (alitasSelectorState.mode === "add" && alitasSelectorState.product) {
+      handleAddAlitasWithFlavor(alitasSelectorState.product, flavor);
+      closeAlitasSelector();
+      return;
+    }
+
+    if (alitasSelectorState.mode === "edit" && alitasSelectorState.lineId) {
+      setCartItems((prev) =>
+        prev.map((item) =>
+          item.lineId === alitasSelectorState.lineId ? { ...item, notes } : item,
+        ),
+      );
+      closeAlitasSelector();
+    }
+  };
+
   const handleAddItem = (product: Product) => {
+    if (isAlitasProduct(product)) {
+      openAlitasSelectorForAdd(product);
+      return;
+    }
+
     setCartItems((prev) => {
       const existing = prev.find(
         (item) => item.productId === product.id && item.notes.trim() === "",
@@ -208,6 +324,7 @@ export default function KioscoPage() {
           station: product.station,
           qty: 1,
           notes: "",
+          isAlitas: false,
         },
       ];
     });
@@ -255,11 +372,13 @@ export default function KioscoPage() {
     setSubmitError(null);
     setIsConfirmOpen(false);
     setIsCartSheetOpen(false);
+    closeAlitasSelector();
   };
 
   const handleClearCart = () => {
     setCartItems([]);
     setSubmitError(null);
+    closeAlitasSelector();
   };
 
   const handleSubmitOrder = async () => {
@@ -323,6 +442,7 @@ export default function KioscoPage() {
   const handleOpenConfirm = () => {
     setIsConfirmOpen(true);
     setIsCartSheetOpen(false);
+    closeAlitasSelector();
   };
 
   if (!orderType && !orderConfirmation) {
@@ -476,6 +596,9 @@ export default function KioscoPage() {
                   {stationLabels[item.station]} •{" "}
                   {formatCurrency(item.price_cents)}
                 </p>
+                {item.notes.trim().length > 0 ? (
+                  <p className="text-sm text-muted">{item.notes}</p>
+                ) : null}
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -497,19 +620,25 @@ export default function KioscoPage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <Button
-                size="md"
-                variant="secondary"
-                type="button"
-                onClick={() => handleOpenNoteModal(item)}
-              >
-                {item.notes.trim().length > 0 ? "Editar nota" : "Agregar nota"}
-              </Button>
-              {item.notes.trim().length > 0 ? (
-                <span className="text-sm text-muted">
-                  Nota: {item.notes}
-                </span>
-              ) : null}
+              {item.isAlitas ? (
+                <Button
+                  size="md"
+                  variant="secondary"
+                  type="button"
+                  onClick={() => openAlitasSelectorForEdit(item)}
+                >
+                  Cambiar sabor
+                </Button>
+              ) : (
+                <Button
+                  size="md"
+                  variant="secondary"
+                  type="button"
+                  onClick={() => handleOpenNoteModal(item)}
+                >
+                  {item.notes.trim().length > 0 ? "Editar nota" : "Agregar nota"}
+                </Button>
+              )}
             </div>
           </div>
         ))}
@@ -869,6 +998,41 @@ export default function KioscoPage() {
                 Cancelar
               </Button>
             </div>
+          </ModalPanel>
+        </Modal>
+      ) : null}
+
+      {alitasSelectorState.productName ? (
+        <Modal onClose={closeAlitasSelector}>
+          <ModalPanel className="max-w-lg space-y-4 border-cta/40 bg-surface-2">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-muted">
+                Selecciona sabor
+              </p>
+              <h2 className="text-2xl font-bold text-ink">
+                {alitasSelectorState.productName ?? "Alitas"}
+              </h2>
+            </div>
+            <div className="grid gap-3">
+              {ALITAS_FLAVORS.map((flavor) => (
+                <Button
+                  key={flavor}
+                  size="xl"
+                  type="button"
+                  onClick={() => handleSelectAlitasFlavor(flavor)}
+                >
+                  {flavor}
+                </Button>
+              ))}
+            </div>
+            <Button
+              size="lg"
+              variant="secondary"
+              onClick={closeAlitasSelector}
+              type="button"
+            >
+              Cancelar
+            </Button>
           </ModalPanel>
         </Modal>
       ) : null}
