@@ -322,7 +322,7 @@ export default function PlanchaPage() {
                               </p>
                               {item.notes ? (
                                 <p className="mt-2 text-base text-muted">
-                                  Nota: {item.notes}
+                                  {item.notes}
                                 </p>
                               ) : null}
                             </div>

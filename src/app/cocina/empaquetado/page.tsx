@@ -344,7 +344,7 @@ export default function EmpaquetadoPage() {
                             </p>
                             {item.notes ? (
                               <p className="mt-1 text-sm text-muted">
-                                Nota: {item.notes}
+                                {item.notes}
                               </p>
                             ) : null}
                           </div>
