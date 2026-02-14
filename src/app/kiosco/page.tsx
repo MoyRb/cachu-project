@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { BottomActions } from "@/components/ui/BottomActions";
 import { Button } from "@/components/ui/Button";
@@ -83,40 +83,37 @@ export default function KioscoPage() {
     type: OrderType;
   } | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadProducts = useCallback(async (showLoading: boolean) => {
+    try {
+      if (showLoading) {
+        setIsLoadingProducts(true);
+      }
 
-    async function loadProducts(showLoading: boolean) {
-      try {
-        if (showLoading) {
-          setIsLoadingProducts(true);
-        }
-        const response = await fetch("/api/products", {
-          cache: "no-store",
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload?.error ?? "No se pudieron cargar productos.");
-        }
-        if (isMounted) {
-          setProducts(payload?.data ?? []);
-          setProductsError(null);
-        }
-      } catch (error) {
-        if (isMounted) {
-          setProductsError(
-            error instanceof Error
-              ? error.message
-              : "No se pudieron cargar productos.",
-          );
-        }
-      } finally {
-        if (isMounted && showLoading) {
-          setIsLoadingProducts(false);
-        }
+      const response = await fetch("/api/products", {
+        cache: "no-store",
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "No se pudieron cargar productos.");
+      }
+
+      setProducts(payload?.data ?? []);
+      setProductsError(null);
+    } catch (error) {
+      setProductsError(
+        error instanceof Error
+          ? error.message
+          : "No se pudieron cargar productos.",
+      );
+    } finally {
+      if (showLoading) {
+        setIsLoadingProducts(false);
       }
     }
+  }, []);
 
+  useEffect(() => {
     void loadProducts(true);
 
     const refreshInterval = window.setInterval(() => {
@@ -124,10 +121,9 @@ export default function KioscoPage() {
     }, 30_000);
 
     return () => {
-      isMounted = false;
       window.clearInterval(refreshInterval);
     };
-  }, []);
+  }, [loadProducts]);
 
   useEffect(() => {
     if (orderConfirmation) {
@@ -569,10 +565,18 @@ export default function KioscoPage() {
                 </p>
               </Card>
             ) : productsError ? (
-              <Card>
-                <p className="text-lg font-semibold text-ink">
+              <Card className="space-y-4 border-rose-200 bg-rose-50/70">
+                <p className="text-lg font-semibold text-rose-800">
                   {productsError}
                 </p>
+                <Button
+                  size="md"
+                  variant="secondary"
+                  onClick={() => void loadProducts(true)}
+                  type="button"
+                >
+                  Reintentar
+                </Button>
               </Card>
             ) : groupedProducts.length === 0 ? (
               <Card>
