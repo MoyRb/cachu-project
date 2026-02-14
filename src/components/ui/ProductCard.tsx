@@ -2,8 +2,8 @@ import type { HTMLAttributes } from "react";
 
 import Image from "next/image";
 
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
+import { cn } from "@/lib/utils";
 
 type ProductCardProps = HTMLAttributes<HTMLDivElement> & {
   title: string;
@@ -37,10 +37,11 @@ export function ProductCard({
       className="object-cover"
     />
   ) : (
-    <div
-      className="absolute inset-0 bg-gradient-to-br from-surface-2 via-surface-1 to-surface-2"
-      aria-hidden="true"
-    />
+    <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-surface-2 via-surface-1 to-surface-2">
+      <span className="rounded-full border border-border/80 bg-surface/90 px-4 py-2 text-sm font-semibold text-muted">
+        Sin imagen
+      </span>
+    </div>
   );
 
   const imageWrapper = (
