@@ -7,6 +7,7 @@ import { BottomActions } from "@/components/ui/BottomActions";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
+import { ItemCustomizerModal } from "@/components/ui/ItemCustomizerModal";
 import { Modal, ModalPanel } from "@/components/ui/Modal";
 import { ProductCard } from "@/components/ui/ProductCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -35,6 +36,11 @@ type CartItem = {
   qty: number;
   notes: string;
   isAlitas: boolean;
+  isIngredientCustomized: boolean;
+};
+
+type IngredientCustomizationRule = {
+  requiredCount: number;
 };
 
 const ALITAS_FLAVORS = [
@@ -46,6 +52,48 @@ const ALITAS_FLAVORS = [
 ] as const;
 
 const buildFlavorNote = (flavor: string) => `Sabor: ${flavor}`;
+
+const INGREDIENT_OPTIONS = [
+  "Milanesa",
+  "Panela",
+  "Jamón",
+  "Tocino",
+  "Pierna",
+  "Chorizo",
+  "Salchicha",
+] as const;
+
+const PRODUCT_CUSTOMIZATION_RULES: Record<string, IngredientCustomizationRule> = {
+  "Torta Sencilla": { requiredCount: 1 },
+  "Torta Combinada": { requiredCount: 2 },
+  "Torta con 3 ingredientes": { requiredCount: 3 },
+};
+
+const getIngredientCustomizationRule = (
+  productName: string,
+): IngredientCustomizationRule | null => PRODUCT_CUSTOMIZATION_RULES[productName] ?? null;
+
+const buildIngredientNote = (ingredients: string[], note: string) => {
+  const base = `Ingredientes: ${ingredients.join(", ")}`;
+  const trimmedNote = note.trim();
+  return trimmedNote ? `${base} | Nota: ${trimmedNote}` : base;
+};
+
+const parseIngredientNote = (notes: string) => {
+  const trimmed = notes.trim();
+  const [ingredientsPart, notePart] = trimmed.split("| Nota:");
+
+  const ingredients = ingredientsPart
+    ?.replace(/^Ingredientes:\s*/u, "")
+    .split(",")
+    .map((ingredient) => ingredient.trim())
+    .filter((ingredient) => ingredient.length > 0) ?? [];
+
+  return {
+    ingredients,
+    note: notePart?.trim() ?? "",
+  };
+};
 
 const isAlitasProduct = (product: Product) => {
   const categoryName =
@@ -109,6 +157,23 @@ export default function KioscoPage() {
     productName: string | null;
     lineId: string | null;
   }>({ mode: "add", product: null, productName: null, lineId: null });
+  const [itemCustomizerState, setItemCustomizerState] = useState<{
+    mode: "add" | "edit";
+    product: Product | null;
+    productName: string | null;
+    lineId: string | null;
+    requiredCount: number;
+    selectedIngredients: string[];
+    note: string;
+  }>({
+    mode: "add",
+    product: null,
+    productName: null,
+    lineId: null,
+    requiredCount: 0,
+    selectedIngredients: [],
+    note: "",
+  });
   const [orderConfirmation, setOrderConfirmation] = useState<{
     orderNumber: number;
     orderId: string;
@@ -244,9 +309,118 @@ export default function KioscoPage() {
           qty: 1,
           notes,
           isAlitas: true,
+          isIngredientCustomized: false,
         },
       ];
     });
+  };
+
+  const openItemCustomizerForAdd = (product: Product, requiredCount: number) => {
+    setItemCustomizerState({
+      mode: "add",
+      product,
+      productName: product.name,
+      lineId: null,
+      requiredCount,
+      selectedIngredients: [],
+      note: "",
+    });
+  };
+
+  const openItemCustomizerForEdit = (item: CartItem) => {
+    const product = products.find((productItem) => productItem.id === item.productId) ?? null;
+    const rule = getIngredientCustomizationRule(item.name);
+    const parsed = parseIngredientNote(item.notes);
+
+    setItemCustomizerState({
+      mode: "edit",
+      product,
+      productName: item.name,
+      lineId: item.lineId,
+      requiredCount: rule?.requiredCount ?? parsed.ingredients.length,
+      selectedIngredients: parsed.ingredients,
+      note: parsed.note,
+    });
+  };
+
+  const closeItemCustomizer = () => {
+    setItemCustomizerState({
+      mode: "add",
+      product: null,
+      productName: null,
+      lineId: null,
+      requiredCount: 0,
+      selectedIngredients: [],
+      note: "",
+    });
+  };
+
+  const handleToggleIngredient = (ingredient: string) => {
+    setItemCustomizerState((prev) => {
+      const exists = prev.selectedIngredients.includes(ingredient);
+      if (exists) {
+        return {
+          ...prev,
+          selectedIngredients: prev.selectedIngredients.filter(
+            (item) => item !== ingredient,
+          ),
+        };
+      }
+
+      if (prev.selectedIngredients.length >= prev.requiredCount) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        selectedIngredients: [...prev.selectedIngredients, ingredient],
+      };
+    });
+  };
+
+  const handleConfirmItemCustomization = () => {
+    const {
+      mode,
+      product,
+      lineId,
+      requiredCount,
+      selectedIngredients,
+      note,
+    } = itemCustomizerState;
+
+    if (selectedIngredients.length !== requiredCount) {
+      return;
+    }
+
+    const notes = buildIngredientNote(selectedIngredients, note);
+
+    if (mode === "add" && product) {
+      setCartItems((prev) => [
+        ...prev,
+        {
+          lineId: createLineId(),
+          productId: product.id,
+          name: product.name,
+          price_cents: product.price_cents,
+          station: product.station,
+          qty: 1,
+          notes,
+          isAlitas: false,
+          isIngredientCustomized: true,
+        },
+      ]);
+      closeItemCustomizer();
+      return;
+    }
+
+    if (mode === "edit" && lineId) {
+      setCartItems((prev) =>
+        prev.map((item) =>
+          item.lineId === lineId ? { ...item, notes, isIngredientCustomized: true } : item,
+        ),
+      );
+      closeItemCustomizer();
+    }
   };
 
   const openAlitasSelectorForAdd = (product: Product) => {
@@ -298,6 +472,13 @@ export default function KioscoPage() {
   };
 
   const handleAddItem = (product: Product) => {
+    const ingredientRule = getIngredientCustomizationRule(product.name);
+
+    if (ingredientRule) {
+      openItemCustomizerForAdd(product, ingredientRule.requiredCount);
+      return;
+    }
+
     if (isAlitasProduct(product)) {
       openAlitasSelectorForAdd(product);
       return;
@@ -325,6 +506,7 @@ export default function KioscoPage() {
           qty: 1,
           notes: "",
           isAlitas: false,
+          isIngredientCustomized: false,
         },
       ];
     });
@@ -341,6 +523,11 @@ export default function KioscoPage() {
   };
 
   const handleOpenNoteModal = (item: CartItem) => {
+    if (item.isIngredientCustomized) {
+      openItemCustomizerForEdit(item);
+      return;
+    }
+
     setActiveNoteItem(item);
     setNoteDraft(item.notes);
   };
@@ -373,12 +560,14 @@ export default function KioscoPage() {
     setIsConfirmOpen(false);
     setIsCartSheetOpen(false);
     closeAlitasSelector();
+    closeItemCustomizer();
   };
 
   const handleClearCart = () => {
     setCartItems([]);
     setSubmitError(null);
     closeAlitasSelector();
+    closeItemCustomizer();
   };
 
   const handleSubmitOrder = async () => {
@@ -443,6 +632,7 @@ export default function KioscoPage() {
     setIsConfirmOpen(true);
     setIsCartSheetOpen(false);
     closeAlitasSelector();
+    closeItemCustomizer();
   };
 
   if (!orderType && !orderConfirmation) {
@@ -636,7 +826,11 @@ export default function KioscoPage() {
                   type="button"
                   onClick={() => handleOpenNoteModal(item)}
                 >
-                  {item.notes.trim().length > 0 ? "Editar nota" : "Agregar nota"}
+                  {item.isIngredientCustomized
+                    ? "Editar ingredientes"
+                    : item.notes.trim().length > 0
+                      ? "Editar nota"
+                      : "Agregar nota"}
                 </Button>
               )}
             </div>
@@ -1001,6 +1195,21 @@ export default function KioscoPage() {
           </ModalPanel>
         </Modal>
       ) : null}
+
+      <ItemCustomizerModal
+        isOpen={Boolean(itemCustomizerState.productName)}
+        productName={itemCustomizerState.productName ?? "Producto"}
+        options={INGREDIENT_OPTIONS}
+        requiredCount={itemCustomizerState.requiredCount}
+        selectedOptions={itemCustomizerState.selectedIngredients}
+        note={itemCustomizerState.note}
+        onToggleOption={handleToggleIngredient}
+        onNoteChange={(value) =>
+          setItemCustomizerState((prev) => ({ ...prev, note: value }))
+        }
+        onConfirm={handleConfirmItemCustomization}
+        onClose={closeItemCustomizer}
+      />
 
       {alitasSelectorState.productName ? (
         <Modal onClose={closeAlitasSelector}>
