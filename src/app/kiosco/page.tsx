@@ -137,6 +137,8 @@ const topBarLinkBase =
   "inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cta/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 const topBarPrimaryLink = `${topBarLinkBase} h-12 px-6 text-lg bg-cta text-on-primary shadow-sm hover:bg-cta-hover`;
 const topBarSecondaryLink = `${topBarLinkBase} h-10 px-4 text-sm border border-cta/70 text-ink hover:bg-cta/15`;
+const appMode = process.env.NEXT_PUBLIC_APP_MODE ?? "customer";
+const isStaffMode = appMode === "staff";
 
 export default function KioscoPage() {
   const [orderType, setOrderType] = useState<OrderType | null>(null);
@@ -647,12 +649,16 @@ export default function KioscoPage() {
               <h1 className="text-4xl font-bold text-ink">Nuevo pedido</h1>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <Link href="/cocina" className={topBarPrimaryLink}>
-                Cocina
-              </Link>
-              <Link href="/ui-kit" className={topBarSecondaryLink}>
-                UI Kit
-              </Link>
+              {isStaffMode ? (
+                <>
+                  <Link href="/cocina" className={topBarPrimaryLink}>
+                    Cocina
+                  </Link>
+                  <Link href="/ui-kit" className={topBarSecondaryLink}>
+                    UI Kit
+                  </Link>
+                </>
+              ) : null}
               <StatusBadge status="nuevo" />
             </div>
           </TopBar>
@@ -706,12 +712,16 @@ export default function KioscoPage() {
               </h1>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <Link href="/cocina" className={topBarPrimaryLink}>
-                Cocina
-              </Link>
-              <Link href="/ui-kit" className={topBarSecondaryLink}>
-                UI Kit
-              </Link>
+              {isStaffMode ? (
+                <>
+                  <Link href="/cocina" className={topBarPrimaryLink}>
+                    Cocina
+                  </Link>
+                  <Link href="/ui-kit" className={topBarSecondaryLink}>
+                    UI Kit
+                  </Link>
+                </>
+              ) : null}
               <StatusBadge status="listo" />
             </div>
           </TopBar>
@@ -853,12 +863,16 @@ export default function KioscoPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <Link href="/cocina" className={topBarPrimaryLink}>
-              Cocina
-            </Link>
-            <Link href="/ui-kit" className={topBarSecondaryLink}>
-              UI Kit
-            </Link>
+            {isStaffMode ? (
+              <>
+                <Link href="/cocina" className={topBarPrimaryLink}>
+                  Cocina
+                </Link>
+                <Link href="/ui-kit" className={topBarSecondaryLink}>
+                  UI Kit
+                </Link>
+              </>
+            ) : null}
             <Button
               size="lg"
               variant="secondary"
