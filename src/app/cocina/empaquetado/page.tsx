@@ -17,7 +17,7 @@ import {
   formatOrderType,
 } from "@/lib/kitchen/format";
 import { kitchenFetch } from "@/lib/kitchen/fetch";
-import type { Order, OrderStatus } from "@/lib/kitchen/types";
+import type { KitchenRole, Order, OrderStatus } from "@/lib/kitchen/types";
 import { useRealtimeKitchen } from "@/lib/useRealtimeKitchen";
 import { cn } from "@/lib/utils";
 
@@ -133,8 +133,8 @@ export default function EmpaquetadoPage() {
     userId: currentUserId,
     signal,
   }: {
-    role: string;
-    userId: string;
+    role: KitchenRole;
+    userId: number;
     signal: AbortSignal;
   }) => {
     const response = await kitchenFetch(

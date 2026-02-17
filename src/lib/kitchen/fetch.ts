@@ -1,4 +1,5 @@
-import { buildKitchenHeaders, KitchenRole } from "@/lib/kitchen/auth";
+import { buildKitchenHeaders } from "@/lib/kitchen/auth";
+import type { KitchenRole } from "@/lib/kitchen/auth";
 
 export async function kitchenFetch(
   input: RequestInfo | URL,
