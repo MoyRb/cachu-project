@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
@@ -16,6 +17,19 @@ const PAYMENT_METHODS = [
   { value: "cash", label: "Efectivo" },
   { value: "card", label: "Tarjeta" },
 ];
+
+type CashOrderType = "DINEIN" | "TAKEOUT";
+
+const ORDER_TYPE_STORAGE_KEY = "order_type";
+
+const typeLabels: Record<CashOrderType, string> = {
+  DINEIN: "Comer aquí",
+  TAKEOUT: "Para llevar",
+};
+
+const topBarLinkBase =
+  "inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cta/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+const topBarPrimaryLink = `${topBarLinkBase} h-12 px-6 text-lg bg-cta text-on-primary shadow-sm hover:bg-cta-hover`;
 
 const formatCurrency = (valueCents: number) =>
   new Intl.NumberFormat("es-CL", {
@@ -85,6 +99,25 @@ export default function CajaPage() {
   );
   const [showAlert, setShowAlert] = useState(false);
   const alertTimerRef = useRef<number | null>(null);
+  const [orderType, setOrderType] = useState<CashOrderType>("DINEIN");
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const storedOrderType = window.localStorage.getItem(ORDER_TYPE_STORAGE_KEY);
+    if (storedOrderType === "DINEIN" || storedOrderType === "TAKEOUT") {
+      setOrderType(storedOrderType);
+    }
+  }, []);
+
+  const handleOrderTypeChange = (nextType: CashOrderType) => {
+    setOrderType(nextType);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(ORDER_TYPE_STORAGE_KEY, nextType);
+    }
+  };
 
   const loadOrders = useCallback(async () => {
     try {
@@ -204,8 +237,35 @@ export default function CajaPage() {
             <h1 className="text-3xl font-bold text-ink">
               Órdenes por cobrar
             </h1>
+            <p className="text-base font-semibold text-muted">
+              {typeLabels[orderType]}
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-4">
+            <Link href="/kiosco" className={topBarPrimaryLink}>
+              Regresar
+            </Link>
+            <Link href="/cocina" className={topBarPrimaryLink}>
+              Cocina
+            </Link>
+            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-2 p-1">
+              <Button
+                size="md"
+                type="button"
+                variant={orderType === "DINEIN" ? "primary" : "secondary"}
+                onClick={() => handleOrderTypeChange("DINEIN")}
+              >
+                Comer aquí
+              </Button>
+              <Button
+                size="md"
+                type="button"
+                variant={orderType === "TAKEOUT" ? "primary" : "secondary"}
+                onClick={() => handleOrderTypeChange("TAKEOUT")}
+              >
+                Para llevar
+              </Button>
+            </div>
             <Button size="lg" variant="secondary" onClick={loadOrders}>
               Actualizar
             </Button>
