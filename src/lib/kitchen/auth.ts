@@ -30,7 +30,7 @@ export function getStoredKitchenUserId() {
   }
 
   const stored = window.localStorage.getItem(USER_ID_STORAGE_KEY);
-  const parsed = Number(stored);
+  const parsed = Number.parseInt(stored ?? "", 10);
   if (Number.isInteger(parsed) && parsed > 0) {
     return parsed;
   }

@@ -12,7 +12,7 @@ import { useKitchenRole } from "@/hooks/useKitchenRole";
 import { useAwaitingPaymentCount } from "@/hooks/useAwaitingPaymentCount";
 import { formatElapsed, formatItemStatus } from "@/lib/kitchen/format";
 import { kitchenFetch } from "@/lib/kitchen/fetch";
-import type { ItemStatus, Order } from "@/lib/kitchen/types";
+import type { ItemStatus, KitchenRole, Order } from "@/lib/kitchen/types";
 import { useRealtimeKitchen } from "@/lib/useRealtimeKitchen";
 import { cn } from "@/lib/utils";
 
@@ -107,8 +107,8 @@ export default function FreidoraPage() {
     userId: currentUserId,
     signal,
   }: {
-    role: string;
-    userId: string;
+    role: KitchenRole;
+    userId: number;
     signal: AbortSignal;
   }) => {
     const response = await kitchenFetch(
