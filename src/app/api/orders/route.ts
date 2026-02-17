@@ -16,6 +16,32 @@ const PAYMENT_STATUSES = ['AWAITING_PAYMENT', 'PAID', 'CANCELLED'] as const;
 const ITEM_STATIONS = ['PLANCHA', 'FREIDORA'] as const;
 const ITEM_STATUSES = ['EN_COLA', 'PENDIENTE', 'EN_PREPARACION', 'LISTO'] as const;
 
+type ItemStatus = (typeof ITEM_STATUSES)[number];
+
+interface OrderItemInput {
+  product_id?: number | string | { id?: number | null } | null;
+  name_snapshot?: unknown;
+  name?: unknown;
+  price_cents_snapshot?: unknown;
+  price_cents?: unknown;
+  qty?: unknown;
+  station?: unknown;
+  notes?: unknown;
+  group_id?: unknown;
+  status?: ItemStatus | null;
+}
+
+interface RpcOrderItemInput {
+  product_id: number | null;
+  name_snapshot: string;
+  price_cents_snapshot: number;
+  qty: number;
+  station: unknown;
+  notes: unknown;
+  group_id: unknown;
+  status?: ItemStatus | null;
+}
+
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
 }
@@ -98,7 +124,7 @@ async function fetchOrders(
     order_item_id: item.id
   }));
 
-  const itemsByOrder = new Map<number, any[]>();
+  const itemsByOrder = new Map<number, unknown[]>();
   for (const item of normalizedItems) {
     const list = itemsByOrder.get(item.order_id) ?? [];
     list.push(item);
@@ -166,11 +192,19 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
-    const payload = await request.json();
+    const payload = (await request.json()) as {
+      type?: string;
+      customer_name?: string | null;
+      customer_phone?: string | null;
+      address_json?: unknown;
+      notes?: string | null;
+      items?: OrderItemInput[];
+      delivery_fee_cents?: number;
+    };
     const { type, customer_name, customer_phone, address_json, notes, items, delivery_fee_cents } =
       payload ?? {};
 
-    if (!ORDER_TYPES.includes(type)) {
+    if (typeof type !== 'string' || !ORDER_TYPES.includes(type as (typeof ORDER_TYPES)[number])) {
       return jsonError('Invalid order type');
     }
 
@@ -200,7 +234,7 @@ export async function POST(request: NextRequest) {
       return jsonError('Items are required');
     }
 
-    const rpcItems = items.map((item: any) => {
+    const rpcItems: RpcOrderItemInput[] = items.map((item) => {
       let productId: number | null = null;
       if (typeof item.product_id === 'number' && Number.isInteger(item.product_id)) {
         productId = item.product_id;
@@ -240,7 +274,7 @@ export async function POST(request: NextRequest) {
       if (!Number.isInteger(item.qty) || item.qty <= 0) {
         return jsonError('Invalid item qty');
       }
-      if (!ITEM_STATIONS.includes(item.station)) {
+      if (!ITEM_STATIONS.includes(item.station as (typeof ITEM_STATIONS)[number])) {
         return jsonError('Invalid item station');
       }
       if (item.status && !ITEM_STATUSES.includes(item.status)) {
@@ -248,9 +282,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const deliveryFee = Number.isInteger(delivery_fee_cents) ? delivery_fee_cents : 0;
+    const deliveryFee = Number.isInteger(delivery_fee_cents) ? Number(delivery_fee_cents) : 0;
     const subtotal = rpcItems.reduce(
-      (sum: number, item: any) => sum + item.price_cents_snapshot * item.qty,
+      (sum: number, item: RpcOrderItemInput) => sum + item.price_cents_snapshot * item.qty,
       0
     );
     const total = subtotal + deliveryFee;
