@@ -37,7 +37,10 @@ function runMigrations(db: Database.Database) {
     .sort();
 
   const applied = new Set(
-    db.prepare('SELECT name FROM migrations').all().map((row) => row.name)
+    db
+      .prepare('SELECT name FROM migrations')
+      .all<{ name: string }>()
+      .map((row) => row.name)
   );
 
   for (const file of migrationFiles) {
