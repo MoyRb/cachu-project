@@ -1,6 +1,7 @@
 "use client";
 
-import { kitchenRoles, KitchenRole } from "@/lib/kitchen/auth";
+import { kitchenRoles } from "@/lib/kitchen/auth";
+import type { KitchenRole } from "@/lib/kitchen/auth";
 import { cn } from "@/lib/utils";
 
 type RoleSelectorProps = {

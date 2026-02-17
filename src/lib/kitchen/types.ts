@@ -1,3 +1,16 @@
+export type KitchenRole = "PLANCHA" | "FREIDORA" | "EMPAQUETADO" | "ADMIN";
+
+export const kitchenRoles: KitchenRole[] = [
+  "PLANCHA",
+  "FREIDORA",
+  "EMPAQUETADO",
+  "ADMIN",
+];
+
+export function isKitchenRole(value: string): value is KitchenRole {
+  return kitchenRoles.includes(value as KitchenRole);
+}
+
 export type OrderStatus =
   | "RECIBIDO"
   | "EN_PROCESO"

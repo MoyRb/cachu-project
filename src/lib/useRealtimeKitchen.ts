@@ -2,19 +2,20 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import type { KitchenRole } from "@/lib/kitchen/types";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 type OrdersFetcher<T> = (params: {
-  role: string;
-  userId: string;
+  role: KitchenRole;
+  userId: number;
   signal: AbortSignal;
 }) => Promise<T>;
 
 type RealtimeStatus = "connecting" | "connected" | "fallback";
 
 type UseRealtimeKitchenOptions<T> = {
-  role: string;
-  userId: string;
+  role: KitchenRole;
+  userId: number;
   enabled?: boolean;
   fetcher: OrdersFetcher<T>;
   signature?: (data: T) => string;

@@ -6,10 +6,10 @@ import {
   clearKitchenSession,
   getStoredKitchenSession,
   isKitchenDev,
-  KitchenRole,
   persistKitchenRole,
   persistKitchenUserId,
 } from "@/lib/kitchen/auth";
+import type { KitchenRole } from "@/lib/kitchen/auth";
 
 export function useKitchenRole(defaultRole: KitchenRole) {
   const [role, setRole] = useState<KitchenRole>(defaultRole);

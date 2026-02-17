@@ -1,11 +1,8 @@
-export type KitchenRole = "PLANCHA" | "FREIDORA" | "EMPAQUETADO" | "ADMIN";
+import { isKitchenRole, kitchenRoles } from "@/lib/kitchen/types";
+import type { KitchenRole } from "@/lib/kitchen/types";
 
-export const kitchenRoles: KitchenRole[] = [
-  "PLANCHA",
-  "FREIDORA",
-  "EMPAQUETADO",
-  "ADMIN",
-];
+export { kitchenRoles };
+export type { KitchenRole };
 
 const ROLE_STORAGE_KEY = "cachu_role";
 const USER_ID_STORAGE_KEY = "cachu_user_id";
@@ -20,8 +17,8 @@ export function getStoredKitchenRole() {
   }
 
   const stored = window.localStorage.getItem(ROLE_STORAGE_KEY);
-  if (stored && kitchenRoles.includes(stored as KitchenRole)) {
-    return stored as KitchenRole;
+  if (stored && isKitchenRole(stored)) {
+    return stored;
   }
 
   return null;
