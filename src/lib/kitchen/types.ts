@@ -57,5 +57,8 @@ export type Order = {
   subtotal_cents?: number | null;
   delivery_fee_cents?: number | null;
   total_cents?: number | null;
+  ticket_text?: string | null;
+  printed_customer_at?: string | null;
+  printed_packaging_at?: string | null;
   items: OrderItem[];
 };

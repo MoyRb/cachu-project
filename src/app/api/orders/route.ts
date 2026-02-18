@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureRole, getAuthContext, Role } from '@/lib/auth';
+import { buildTicketText } from '@/lib/printing/ticket';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 const ORDER_STATUSES = [
@@ -36,8 +37,8 @@ interface RpcOrderItemInput {
   name_snapshot: string;
   price_cents_snapshot: number;
   qty: number;
-  station: unknown;
-  notes: unknown;
+  station: string;
+  notes: string | null;
   group_id: unknown;
   status?: ItemStatus | null;
 }
@@ -258,8 +259,8 @@ export async function POST(request: NextRequest) {
         name_snapshot: String(item.name_snapshot ?? item.name ?? '').trim(),
         price_cents_snapshot: Number(item.price_cents_snapshot ?? item.price_cents),
         qty: Number(item.qty ?? 1),
-        station: item.station,
-        notes: item.notes ?? null,
+        station: String(item.station ?? '').trim(),
+        notes: typeof item.notes === 'string' ? item.notes : null,
         group_id: item.group_id ?? null
       };
     });
@@ -347,11 +348,31 @@ export async function POST(request: NextRequest) {
       throw new Error('Failed to create order');
     }
 
+    const ticketText = buildTicketText({
+      order_number: Number(orderNumber),
+      type: type as (typeof ORDER_TYPES)[number],
+      status: 'RECIBIDO',
+      created_at: new Date().toISOString(),
+      items: rpcItems,
+      notes: notes ?? null,
+      delivery_fee_cents: deliveryFee,
+      total_cents: total
+    });
+
+    const { error: ticketError } = await supabase
+      .from('orders')
+      .update({ ticket_text: ticketText })
+      .eq('id', orderId);
+    if (ticketError) {
+      throw new Error(ticketError.message);
+    }
+
     if (isKioskRequest) {
       return NextResponse.json(
         {
           order_id: String(orderId),
-          order_number: Number(orderNumber)
+          order_number: Number(orderNumber),
+          ticket_text: ticketText
         },
         { status: 200 }
       );
@@ -385,6 +406,7 @@ export async function POST(request: NextRequest) {
       toJsonSafe({
         order_id: String(order.id),
         order_number: Number(order.order_number),
+        ticket_text: ticketText,
         order: normalizedOrder
       }),
       { status: 201 }

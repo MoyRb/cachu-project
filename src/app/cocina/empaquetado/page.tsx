@@ -19,6 +19,7 @@ import {
 import { kitchenFetch } from "@/lib/kitchen/fetch";
 import type { KitchenRole, Order, OrderStatus } from "@/lib/kitchen/types";
 import { useRealtimeKitchen } from "@/lib/useRealtimeKitchen";
+import { printRawBT } from "@/lib/printing/rawbt";
 import { cn } from "@/lib/utils";
 
 const STATUS_PRIORITY: Record<OrderStatus, number> = {
@@ -121,6 +122,7 @@ export default function EmpaquetadoPage() {
     enabled: isReady && hasSession,
   });
   const [actionOrderId, setActionOrderId] = useState<number | null>(null);
+  const [printingOrderId, setPrintingOrderId] = useState<number | null>(null);
 
   useEffect(() => {
     if (isReady && !hasSession) {
@@ -173,6 +175,68 @@ export default function EmpaquetadoPage() {
     return getSortedOrders(data ?? []);
   }, [data]);
 
+
+  const getTicketText = async (order: Order) => {
+    if (order.ticket_text && order.ticket_text.trim().length > 0) {
+      return order.ticket_text;
+    }
+
+    const response = await kitchenFetch(
+      `/api/orders/${order.id}/ticket`,
+      undefined,
+      {
+        role,
+        userId,
+      },
+    );
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(resolveRequestError(payload, new Error("No se pudo cargar el ticket.")));
+    }
+
+    const ticketText = String(payload?.ticket_text ?? "");
+    if (!ticketText.trim()) {
+      throw new Error("El ticket está vacío.");
+    }
+
+    return ticketText;
+  };
+
+  const markPackagingPrinted = async (orderId: number) => {
+    const response = await kitchenFetch(
+      `/api/orders/${orderId}/printed`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "packaging" }),
+      },
+      {
+        role,
+        userId,
+      },
+    );
+
+    if (!response.ok) {
+      const payload = await response.json();
+      throw new Error(resolveRequestError(payload, new Error("No se pudo registrar la impresión.")));
+    }
+  };
+
+  const printPackagingTicket = async (order: Order) => {
+    setPrintingOrderId(order.id);
+    setActionError(null);
+    try {
+      const ticketText = await getTicketText(order);
+      await printRawBT(ticketText);
+      await markPackagingPrinted(order.id);
+      await refreshNow();
+    } catch (error) {
+      setActionError(resolveRequestError(null, error));
+    } finally {
+      setPrintingOrderId(null);
+    }
+  };
+
   const handleStatusChange = async (orderId: number, status: OrderStatus) => {
     setActionError(null);
     setActionOrderId(orderId);
@@ -195,7 +259,17 @@ export default function EmpaquetadoPage() {
           resolveRequestError(payload, new Error("No se pudo actualizar el pedido.")),
         );
       }
-      await refreshNow();
+
+      const updatedOrder = payload?.order as Order | undefined;
+      if (
+        status === "LISTO_PARA_ENTREGAR" &&
+        updatedOrder &&
+        !updatedOrder.printed_packaging_at
+      ) {
+        await printPackagingTicket(updatedOrder);
+      } else {
+        await refreshNow();
+      }
     } catch (updateError) {
       setActionError(resolveRequestError(null, updateError));
     } finally {
@@ -368,11 +442,14 @@ export default function EmpaquetadoPage() {
                       <Button
                         size="lg"
                         variant="secondary"
-                        onClick={() =>
-                          window.open(`/print/order/${order.id}`, "_blank")
-                        }
+                        onClick={() => void printPackagingTicket(order)}
+                        disabled={printingOrderId === order.id}
                       >
-                        Imprimir ticket
+                        {printingOrderId === order.id
+                          ? "Imprimiendo..."
+                          : order.printed_packaging_at
+                            ? "Reimprimir"
+                            : "Imprimir ticket"}
                       </Button>
                     </div>
                   </Card>
