@@ -12,6 +12,7 @@ import { Modal, ModalPanel } from "@/components/ui/Modal";
 import { ProductCard } from "@/components/ui/ProductCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { TopBar } from "@/components/ui/TopBar";
+import { printRawBT } from "@/lib/printing/rawbt";
 
 type OrderType = "DINEIN" | "TAKEOUT";
 type Station = "PLANCHA" | "FREIDORA";
@@ -181,7 +182,10 @@ export default function KioscoPage() {
     orderId: string;
     items: CartItem[];
     type: OrderType;
+    ticketText: string;
   } | null>(null);
+  const [printError, setPrintError] = useState<string | null>(null);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   const loadProducts = useCallback(async (showLoading: boolean) => {
     try {
@@ -559,6 +563,7 @@ export default function KioscoPage() {
     setOrderNotes("");
     setOrderConfirmation(null);
     setSubmitError(null);
+    setPrintError(null);
     setIsConfirmOpen(false);
     setIsCartSheetOpen(false);
     closeAlitasSelector();
@@ -571,6 +576,34 @@ export default function KioscoPage() {
     closeAlitasSelector();
     closeItemCustomizer();
   };
+
+  const markCustomerPrinted = useCallback(async (orderId: string) => {
+    await fetch(`/api/orders/${orderId}/printed`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "customer" }),
+    });
+  }, []);
+
+  const handlePrintCustomerTicket = useCallback(
+    async (orderId: string, ticketText: string) => {
+      setIsPrinting(true);
+      setPrintError(null);
+      try {
+        await printRawBT(ticketText);
+        await markCustomerPrinted(orderId);
+      } catch (error) {
+        setPrintError(
+          error instanceof Error
+            ? `No se pudo imprimir: ${error.message}`
+            : "No se pudo imprimir el ticket.",
+        );
+      } finally {
+        setIsPrinting(false);
+      }
+    },
+    [markCustomerPrinted],
+  );
 
   const handleSubmitOrder = async () => {
     if (!orderType || cartItems.length === 0) {
@@ -609,12 +642,22 @@ export default function KioscoPage() {
         throw new Error(errorMessage);
       }
 
+      const orderId = String(payload?.order_id ?? "");
+      const ticketText = String(payload?.ticket_text ?? "");
+
       setOrderConfirmation({
         orderNumber: payload?.order_number ?? 0,
-        orderId: String(payload?.order_id ?? ""),
+        orderId,
         items: cartItems,
         type: orderType,
+        ticketText,
       });
+      if (orderId && ticketText) {
+        await handlePrintCustomerTicket(orderId, ticketText);
+      } else {
+        setPrintError("No se recibió el ticket para imprimir.");
+      }
+
       setCartItems([]);
       setOrderNotes("");
       setIsConfirmOpen(false);
@@ -628,6 +671,16 @@ export default function KioscoPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleRetryPrint = async () => {
+    if (!orderConfirmation) {
+      return;
+    }
+    await handlePrintCustomerTicket(
+      orderConfirmation.orderId,
+      orderConfirmation.ticketText,
+    );
   };
 
   const handleOpenConfirm = () => {
@@ -727,6 +780,15 @@ export default function KioscoPage() {
           </TopBar>
 
           <Card className="space-y-6 text-center">
+            {printError ? (
+              <CardDescription className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-left text-rose-700">
+                {printError}
+              </CardDescription>
+            ) : (
+              <CardDescription className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-left text-emerald-700">
+                Ticket enviado a impresión.
+              </CardDescription>
+            )}
             <div className="space-y-3">
               <p className="text-lg font-semibold text-muted">
                 Pedido #
@@ -768,9 +830,19 @@ export default function KioscoPage() {
                 #{orderConfirmation.orderId}
               </p>
             </div>
-            <Button size="xl" onClick={handleResetOrder}>
-              Nuevo pedido
-            </Button>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                size="xl"
+                variant="secondary"
+                onClick={() => void handleRetryPrint()}
+                disabled={isPrinting}
+              >
+                {isPrinting ? "Imprimiendo..." : "Reimprimir ticket"}
+              </Button>
+              <Button size="xl" onClick={handleResetOrder}>
+                Nuevo pedido
+              </Button>
+            </div>
           </BottomActions>
         </section>
       </div>
