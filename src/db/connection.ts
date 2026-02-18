@@ -36,12 +36,10 @@ function runMigrations(db: Database.Database) {
     .filter((file) => file.endsWith('.sql'))
     .sort();
 
-  const applied = new Set(
-    db
-      .prepare('SELECT name FROM migrations')
-      .all<{ name: string }>()
-      .map((row) => row.name)
-  );
+  const rows = db.prepare('SELECT name FROM migrations').all() as Array<{
+    name: string;
+  }>;
+  const applied = new Set(rows.map((row) => row.name));
 
   for (const file of migrationFiles) {
     if (applied.has(file)) continue;
