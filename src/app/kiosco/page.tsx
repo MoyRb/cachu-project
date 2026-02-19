@@ -36,6 +36,7 @@ type CartItem = {
   station: Station;
   qty: number;
   notes: string;
+  noIngredients: string[];
   isAlitas: boolean;
   isIngredientCustomized: boolean;
 };
@@ -63,6 +64,40 @@ const INGREDIENT_OPTIONS = [
   "Chorizo",
   "Salchicha",
 ] as const;
+
+const WITHOUT_INGREDIENT_OPTIONS = [
+  "Lechuga",
+  "Jitomate",
+  "Cebolla",
+  "Catsup",
+  "Mostaza",
+  "BBQ",
+  "Tocino",
+  "Salchicha",
+  "Jamón",
+  "Panela",
+  "Queso amarillo",
+] as const;
+
+const formatNotesFromWithout = (list: string[]): string => {
+  if (list.length === 0) {
+    return "";
+  }
+
+  const formatted = list.map((item) => item.toLowerCase());
+  return `SIN: ${formatted.join(", ")}`;
+};
+
+const formatItemNotes = (item: CartItem): string => {
+  const withoutNotes = formatNotesFromWithout(item.noIngredients);
+  const currentNotes = item.notes.trim();
+
+  if (!withoutNotes) {
+    return currentNotes;
+  }
+
+  return currentNotes ? `${currentNotes} | ${withoutNotes}` : withoutNotes;
+};
 
 const PRODUCT_CUSTOMIZATION_RULES: Record<string, IngredientCustomizationRule> = {
   "Torta Sencilla": { requiredCount: 1 },
@@ -152,8 +187,10 @@ export default function KioscoPage() {
   const [isCartSheetOpen, setIsCartSheetOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [noteDraft, setNoteDraft] = useState("");
-  const [activeNoteItem, setActiveNoteItem] = useState<CartItem | null>(null);
+  const [withoutModalState, setWithoutModalState] = useState<{
+    lineId: string;
+    selectedWithout: string[];
+  } | null>(null);
   const [alitasSelectorState, setAlitasSelectorState] = useState<{
     mode: "add" | "edit";
     product: Product | null;
@@ -314,6 +351,7 @@ export default function KioscoPage() {
           station: product.station,
           qty: 1,
           notes,
+          noIngredients: [],
           isAlitas: true,
           isIngredientCustomized: false,
         },
@@ -411,6 +449,7 @@ export default function KioscoPage() {
           station: product.station,
           qty: 1,
           notes,
+          noIngredients: [],
           isAlitas: false,
           isIngredientCustomized: true,
         },
@@ -511,6 +550,7 @@ export default function KioscoPage() {
           station: product.station,
           qty: 1,
           notes: "",
+          noIngredients: [],
           isAlitas: false,
           isIngredientCustomized: false,
         },
@@ -528,33 +568,54 @@ export default function KioscoPage() {
     );
   };
 
-  const handleOpenNoteModal = (item: CartItem) => {
-    if (item.isIngredientCustomized) {
-      openItemCustomizerForEdit(item);
+  const openWithoutModal = (item: CartItem) => {
+    setWithoutModalState({
+      lineId: item.lineId,
+      selectedWithout: [...item.noIngredients],
+    });
+  };
+
+  const closeWithoutModal = () => {
+    setWithoutModalState(null);
+  };
+
+  const toggleWithoutIngredient = (ingredient: string) => {
+    setWithoutModalState((prev) => {
+      if (!prev) {
+        return prev;
+      }
+
+      const exists = prev.selectedWithout.includes(ingredient);
+      return {
+        ...prev,
+        selectedWithout: exists
+          ? prev.selectedWithout.filter((item) => item !== ingredient)
+          : [...prev.selectedWithout, ingredient],
+      };
+    });
+  };
+
+  const saveWithoutIngredients = () => {
+    if (!withoutModalState) {
       return;
     }
 
-    setActiveNoteItem(item);
-    setNoteDraft(item.notes);
-  };
-
-  const handleCloseNoteModal = () => {
-    setActiveNoteItem(null);
-    setNoteDraft("");
-  };
-
-  const handleSaveNote = () => {
-    if (!activeNoteItem) {
-      return;
-    }
     setCartItems((prev) =>
       prev.map((item) =>
-        item.lineId === activeNoteItem.lineId
-          ? { ...item, notes: noteDraft }
+        item.lineId === withoutModalState.lineId
+          ? { ...item, noIngredients: withoutModalState.selectedWithout }
           : item,
       ),
     );
-    handleCloseNoteModal();
+    closeWithoutModal();
+  };
+
+  const clearWithoutIngredients = (lineId: string) => {
+    setCartItems((prev) =>
+      prev.map((item) =>
+        item.lineId === lineId ? { ...item, noIngredients: [] } : item,
+      ),
+    );
   };
 
   const handleResetOrder = () => {
@@ -627,7 +688,7 @@ export default function KioscoPage() {
             price_cents_snapshot: item.price_cents,
             qty: item.qty,
             station: item.station,
-            notes: item.notes.trim() || null,
+            notes: formatItemNotes(item) || null,
           })),
         }),
       });
@@ -868,8 +929,10 @@ export default function KioscoPage() {
                   {stationLabels[item.station]} •{" "}
                   {formatCurrency(item.price_cents)}
                 </p>
-                {item.notes.trim().length > 0 ? (
-                  <p className="text-sm text-muted">{item.notes}</p>
+                {item.noIngredients.length > 0 ? (
+                  <p className="text-sm text-muted">
+                    {formatNotesFromWithout(item.noIngredients)}
+                  </p>
                 ) : null}
               </div>
               <div className="flex items-center gap-2">
@@ -901,20 +964,35 @@ export default function KioscoPage() {
                 >
                   Cambiar sabor
                 </Button>
-              ) : (
+              ) : null}
+              {item.isIngredientCustomized ? (
                 <Button
                   size="md"
                   variant="secondary"
                   type="button"
-                  onClick={() => handleOpenNoteModal(item)}
+                  onClick={() => openItemCustomizerForEdit(item)}
                 >
-                  {item.isIngredientCustomized
-                    ? "Editar ingredientes"
-                    : item.notes.trim().length > 0
-                      ? "Editar nota"
-                      : "Agregar nota"}
+                  Editar ingredientes
                 </Button>
-              )}
+              ) : null}
+              <Button
+                size="md"
+                variant="secondary"
+                type="button"
+                onClick={() => openWithoutModal(item)}
+              >
+                Personalizar
+              </Button>
+              {item.noIngredients.length > 0 ? (
+                <Button
+                  size="md"
+                  variant="secondary"
+                  type="button"
+                  onClick={() => clearWithoutIngredients(item.lineId)}
+                >
+                  Limpiar
+                </Button>
+              ) : null}
             </div>
           </div>
         ))}
@@ -1249,33 +1327,45 @@ export default function KioscoPage() {
         </Modal>
       ) : null}
 
-      {activeNoteItem ? (
-        <Modal onClose={handleCloseNoteModal}>
-          <ModalPanel className="max-w-lg space-y-4">
+      {withoutModalState ? (
+        <Modal onClose={closeWithoutModal}>
+          <ModalPanel className="max-w-xl space-y-5">
             <div>
               <p className="text-sm font-semibold uppercase tracking-wide text-muted">
-                Nota del producto
+                Quitar ingredientes
               </p>
-              <h2 className="text-2xl font-bold text-ink">
-                {activeNoteItem.name}
-              </h2>
+              <h2 className="text-2xl font-bold text-ink">Selecciona lo que va SIN</h2>
             </div>
-            <Input
-              placeholder="Ej. sin cebolla, sin jitomate"
-              value={noteDraft}
-              onChange={(event) => setNoteDraft(event.target.value)}
-            />
             <div className="flex flex-wrap gap-3">
-              <Button size="lg" onClick={handleSaveNote} type="button">
-                Guardar nota
-              </Button>
+              {WITHOUT_INGREDIENT_OPTIONS.map((ingredient) => {
+                const isSelected = withoutModalState.selectedWithout.includes(ingredient);
+                return (
+                  <button
+                    key={ingredient}
+                    type="button"
+                    onClick={() => toggleWithoutIngredient(ingredient)}
+                    className={`min-h-11 rounded-full border px-4 text-base font-semibold transition-colors ${
+                      isSelected
+                        ? "border-cta bg-cta text-on-primary"
+                        : "border-border bg-surface-2 text-ink hover:bg-surface"
+                    }`}
+                  >
+                    SIN {ingredient}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex flex-wrap gap-3">
               <Button
                 size="lg"
+                onClick={closeWithoutModal}
                 variant="secondary"
-                onClick={handleCloseNoteModal}
                 type="button"
               >
                 Cancelar
+              </Button>
+              <Button size="lg" onClick={saveWithoutIngredients} type="button">
+                Guardar
               </Button>
             </div>
           </ModalPanel>
