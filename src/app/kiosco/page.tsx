@@ -144,7 +144,11 @@ const isAlitasProduct = (product: Product) => {
     return true;
   }
 
-  return normalizedName.startsWith("alitas") || normalizedName.includes("alitas");
+  return (
+    normalizedName.startsWith("alitas") ||
+    normalizedName.includes("alitas") ||
+    normalizedName.includes("boneless")
+  );
 };
 
 const stationLabels: Record<Station, string> = {
@@ -929,6 +933,9 @@ export default function KioscoPage() {
                   {stationLabels[item.station]} •{" "}
                   {formatCurrency(item.price_cents)}
                 </p>
+                {item.notes.trim() ? (
+                  <p className="text-sm text-muted">{item.notes}</p>
+                ) : null}
                 {item.noIngredients.length > 0 ? (
                   <p className="text-sm text-muted">
                     {formatNotesFromWithout(item.noIngredients)}
