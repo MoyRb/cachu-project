@@ -47,6 +47,20 @@ Puedes configurar los PINs con variables públicas. Si no se definen, se usan lo
 
 - `GET /api/health` → responde `200 OK` con `{ status: "ok" }`.
 
+### Limpieza automática de pedidos (Vercel Cron)
+
+- Endpoint cron: `GET /api/cron/cleanup-orders`.
+- Seguridad: define `CRON_SECRET` y envíalo como query param (`?secret=...`) o header `x-cron-secret`.
+- Frecuencia en producción: cada 10 minutos mediante `vercel.json`.
+
+Prueba manual:
+
+```bash
+curl "https://<domain>/api/cron/cleanup-orders?secret=<CRON_SECRET>"
+```
+
+Si prefieres no pasar secretos por query string, configura el Cron en el dashboard de Vercel para llamar `/api/cron/cleanup-orders` y añade el header `x-cron-secret: <CRON_SECRET>`.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
