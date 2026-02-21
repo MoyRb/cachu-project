@@ -69,6 +69,8 @@ const WITHOUT_INGREDIENT_OPTIONS = [
   "Lechuga",
   "Jitomate",
   "Cebolla",
+  "Piña",
+  "Jalapeños",
   "Catsup",
   "Mostaza",
   "BBQ",
