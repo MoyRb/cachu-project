@@ -4,22 +4,31 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 const ONE_HOUR_MS = 60 * 60 * 1000;
 
 function isAuthorized(request: NextRequest) {
+  const userAgent = request.headers.get("user-agent") ?? "";
+  const isVercelCron = userAgent.includes("vercel-cron/1.0");
+
+  if (isVercelCron) {
+    return true;
+  }
+
   const configuredSecret = process.env.CRON_SECRET?.trim() ?? "";
-  if (!configuredSecret) {
+  const querySecret = request.nextUrl.searchParams.get("secret")?.trim() ?? "";
+
+  if (!configuredSecret || !querySecret) {
     return false;
   }
 
-  const querySecret = request.nextUrl.searchParams.get("secret");
-  const headerSecret = request.headers.get("x-cron-secret");
-
-  return querySecret === configuredSecret || headerSecret === configuredSecret;
+  return querySecret === configuredSecret;
 }
 
 export async function GET(request: NextRequest) {
   const start = Date.now();
 
   if (!isAuthorized(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized. Expected Vercel Cron user-agent or valid ?secret." },
+      { status: 401 },
+    );
   }
 
   try {

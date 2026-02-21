@@ -50,16 +50,17 @@ Puedes configurar los PINs con variables públicas. Si no se definen, se usan lo
 ### Limpieza automática de pedidos (Vercel Cron)
 
 - Endpoint cron: `GET /api/cron/cleanup-orders`.
-- Seguridad: define `CRON_SECRET` y envíalo como query param (`?secret=...`) o header `x-cron-secret`.
-- Frecuencia en producción: cada 10 minutos mediante `vercel.json`.
+- Plan Hobby: **solo 1 ejecución al día** (23:59 hora México aprox.) con `schedule: "59 5 * * *"` en `vercel.json`.
+- Seguridad sin secret obligatorio:
+  - El cron real de Vercel queda permitido automáticamente si `user-agent` incluye `vercel-cron/1.0`.
+  - Opcionalmente, también puedes ejecutar manualmente con `?secret=...` cuando `CRON_SECRET` está definido.
+  - Si no cumple alguna de esas condiciones, el endpoint responde `401`.
 
-Prueba manual:
+Prueba manual (opcional con secret):
 
 ```bash
 curl "https://<domain>/api/cron/cleanup-orders?secret=<CRON_SECRET>"
 ```
-
-Si prefieres no pasar secretos por query string, configura el Cron en el dashboard de Vercel para llamar `/api/cron/cleanup-orders` y añade el header `x-cron-secret: <CRON_SECRET>`.
 
 ## Learn More
 
