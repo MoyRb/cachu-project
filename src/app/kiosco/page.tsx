@@ -68,6 +68,7 @@ const INGREDIENT_OPTIONS = [
 const WITHOUT_INGREDIENT_OPTIONS = [
   "Lechuga",
   "Jitomate",
+  "Zanahoria",
   "Cebolla",
   "Piña",
   "Jalapeños",
