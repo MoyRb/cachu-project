@@ -29,10 +29,10 @@ type Product = {
 };
 
 type CartItem = {
-  lineId: string;
+  cartItemId: string;
   productId: number;
   name: string;
-  price_cents: number;
+  priceCents: number;
   station: Station;
   qty: number;
   notes: string;
@@ -101,6 +101,9 @@ const formatItemNotes = (item: CartItem): string => {
 
   return currentNotes ? `${currentNotes} | ${withoutNotes}` : withoutNotes;
 };
+
+const hasItemCustomization = (item: CartItem) =>
+  item.notes.trim().length > 0 || item.noIngredients.length > 0;
 
 const PRODUCT_CUSTOMIZATION_RULES: Record<string, IngredientCustomizationRule> = {
   "Torta Sencilla": { requiredCount: 1 },
@@ -171,7 +174,7 @@ const formatCurrency = (valueCents: number) =>
     maximumFractionDigits: 0,
   }).format(valueCents / 100);
 
-const createLineId = () =>
+const createCartItemId = () =>
   typeof globalThis.crypto?.randomUUID === "function"
     ? globalThis.crypto.randomUUID()
     : `line-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -195,20 +198,20 @@ export default function KioscoPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [withoutModalState, setWithoutModalState] = useState<{
-    lineId: string;
+    cartItemId: string;
     selectedWithout: string[];
   } | null>(null);
   const [alitasSelectorState, setAlitasSelectorState] = useState<{
     mode: "add" | "edit";
     product: Product | null;
     productName: string | null;
-    lineId: string | null;
-  }>({ mode: "add", product: null, productName: null, lineId: null });
+    cartItemId: string | null;
+  }>({ mode: "add", product: null, productName: null, cartItemId: null });
   const [itemCustomizerState, setItemCustomizerState] = useState<{
     mode: "add" | "edit";
     product: Product | null;
     productName: string | null;
-    lineId: string | null;
+    cartItemId: string | null;
     requiredCount: number;
     selectedIngredients: string[];
     note: string;
@@ -216,7 +219,7 @@ export default function KioscoPage() {
     mode: "add",
     product: null,
     productName: null,
-    lineId: null,
+    cartItemId: null,
     requiredCount: 0,
     selectedIngredients: [],
     note: "",
@@ -328,7 +331,7 @@ export default function KioscoPage() {
   const subtotalCents = useMemo(
     () =>
       cartItems.reduce(
-        (sum, item) => sum + item.qty * item.price_cents,
+        (sum, item) => sum + item.qty * item.priceCents,
         0,
       ),
     [cartItems],
@@ -344,17 +347,17 @@ export default function KioscoPage() {
 
       if (existing) {
         return prev.map((item) =>
-          item.lineId === existing.lineId ? { ...item, qty: item.qty + 1 } : item,
+          item.cartItemId === existing.cartItemId ? { ...item, qty: item.qty + 1 } : item,
         );
       }
 
       return [
         ...prev,
         {
-          lineId: createLineId(),
+          cartItemId: createCartItemId(),
           productId: product.id,
           name: product.name,
-          price_cents: product.price_cents,
+          priceCents: product.price_cents,
           station: product.station,
           qty: 1,
           notes,
@@ -371,7 +374,7 @@ export default function KioscoPage() {
       mode: "add",
       product,
       productName: product.name,
-      lineId: null,
+      cartItemId: null,
       requiredCount,
       selectedIngredients: [],
       note: "",
@@ -379,15 +382,18 @@ export default function KioscoPage() {
   };
 
   const openItemCustomizerForEdit = (item: CartItem) => {
+    const targetCartItemId = ensureSingleUnitCartItem(item.cartItemId);
+    const targetItem =
+      cartItems.find((cartItem) => cartItem.cartItemId === targetCartItemId) ?? item;
     const product = products.find((productItem) => productItem.id === item.productId) ?? null;
-    const rule = getIngredientCustomizationRule(item.name);
-    const parsed = parseIngredientNote(item.notes);
+    const rule = getIngredientCustomizationRule(targetItem.name);
+    const parsed = parseIngredientNote(targetItem.notes);
 
     setItemCustomizerState({
       mode: "edit",
       product,
-      productName: item.name,
-      lineId: item.lineId,
+      productName: targetItem.name,
+      cartItemId: targetCartItemId,
       requiredCount: rule?.requiredCount ?? parsed.ingredients.length,
       selectedIngredients: parsed.ingredients,
       note: parsed.note,
@@ -399,7 +405,7 @@ export default function KioscoPage() {
       mode: "add",
       product: null,
       productName: null,
-      lineId: null,
+      cartItemId: null,
       requiredCount: 0,
       selectedIngredients: [],
       note: "",
@@ -433,7 +439,7 @@ export default function KioscoPage() {
     const {
       mode,
       product,
-      lineId,
+      cartItemId,
       requiredCount,
       selectedIngredients,
       note,
@@ -449,10 +455,10 @@ export default function KioscoPage() {
       setCartItems((prev) => [
         ...prev,
         {
-          lineId: createLineId(),
+          cartItemId: createCartItemId(),
           productId: product.id,
           name: product.name,
-          price_cents: product.price_cents,
+          priceCents: product.price_cents,
           station: product.station,
           qty: 1,
           notes,
@@ -465,10 +471,10 @@ export default function KioscoPage() {
       return;
     }
 
-    if (mode === "edit" && lineId) {
+    if (mode === "edit" && cartItemId) {
       setCartItems((prev) =>
         prev.map((item) =>
-          item.lineId === lineId ? { ...item, notes, isIngredientCustomized: true } : item,
+          item.cartItemId === cartItemId ? { ...item, notes, isIngredientCustomized: true } : item,
         ),
       );
       closeItemCustomizer();
@@ -480,18 +486,21 @@ export default function KioscoPage() {
       mode: "add",
       product,
       productName: product.name,
-      lineId: null,
+      cartItemId: null,
     });
   };
 
   const openAlitasSelectorForEdit = (item: CartItem) => {
+    const targetCartItemId = ensureSingleUnitCartItem(item.cartItemId);
+    const targetItem =
+      cartItems.find((cartItem) => cartItem.cartItemId === targetCartItemId) ?? item;
     const product = products.find((productItem) => productItem.id === item.productId) ?? null;
 
     setAlitasSelectorState({
       mode: "edit",
       product,
-      productName: item.name,
-      lineId: item.lineId,
+      productName: targetItem.name,
+      cartItemId: targetCartItemId,
     });
   };
 
@@ -500,7 +509,7 @@ export default function KioscoPage() {
       mode: "add",
       product: null,
       productName: null,
-      lineId: null,
+      cartItemId: null,
     });
   };
 
@@ -513,10 +522,10 @@ export default function KioscoPage() {
       return;
     }
 
-    if (alitasSelectorState.mode === "edit" && alitasSelectorState.lineId) {
+    if (alitasSelectorState.mode === "edit" && alitasSelectorState.cartItemId) {
       setCartItems((prev) =>
         prev.map((item) =>
-          item.lineId === alitasSelectorState.lineId ? { ...item, notes } : item,
+          item.cartItemId === alitasSelectorState.cartItemId ? { ...item, notes } : item,
         ),
       );
       closeAlitasSelector();
@@ -542,7 +551,7 @@ export default function KioscoPage() {
       );
       if (existing) {
         return prev.map((item) =>
-          item.lineId === existing.lineId
+          item.cartItemId === existing.cartItemId
             ? { ...item, qty: item.qty + 1 }
             : item,
         );
@@ -550,10 +559,10 @@ export default function KioscoPage() {
       return [
         ...prev,
         {
-          lineId: createLineId(),
+          cartItemId: createCartItemId(),
           productId: product.id,
           name: product.name,
-          price_cents: product.price_cents,
+          priceCents: product.price_cents,
           station: product.station,
           qty: 1,
           notes: "",
@@ -565,20 +574,57 @@ export default function KioscoPage() {
     });
   };
 
-  const handleQtyChange = (lineId: string, delta: number) => {
+  const ensureSingleUnitCartItem = (cartItemId: string) => {
+    const target = cartItems.find((item) => item.cartItemId === cartItemId);
+    if (!target || target.qty <= 1) {
+      return cartItemId;
+    }
+
+    const splitCartItemId = createCartItemId();
+
     setCartItems((prev) =>
-      prev
-        .map((item) =>
-          item.lineId === lineId ? { ...item, qty: item.qty + delta } : item,
-        )
-        .filter((item) => item.qty > 0),
+      prev.flatMap((item) => {
+        if (item.cartItemId !== cartItemId || item.qty <= 1) {
+          return [item];
+        }
+
+        return [
+          { ...item, qty: item.qty - 1 },
+          { ...item, cartItemId: splitCartItemId, qty: 1 },
+        ];
+      }),
     );
+
+    return splitCartItemId;
+  };
+
+  const handleQtyChange = (cartItemId: string, delta: number) => {
+    setCartItems((prev) => {
+      const target = prev.find((item) => item.cartItemId === cartItemId);
+      if (!target) {
+        return prev;
+      }
+
+      if (delta > 0 && hasItemCustomization(target)) {
+        return [...prev, { ...target, cartItemId: createCartItemId(), qty: 1 }];
+      }
+
+      return prev
+        .map((item) =>
+          item.cartItemId === cartItemId ? { ...item, qty: item.qty + delta } : item,
+        )
+        .filter((item) => item.qty > 0);
+    });
   };
 
   const openWithoutModal = (item: CartItem) => {
+    const targetCartItemId = ensureSingleUnitCartItem(item.cartItemId);
+    const targetItem =
+      cartItems.find((cartItem) => cartItem.cartItemId === targetCartItemId) ?? item;
+
     setWithoutModalState({
-      lineId: item.lineId,
-      selectedWithout: [...item.noIngredients],
+      cartItemId: targetCartItemId,
+      selectedWithout: [...targetItem.noIngredients],
     });
   };
 
@@ -609,7 +655,7 @@ export default function KioscoPage() {
 
     setCartItems((prev) =>
       prev.map((item) =>
-        item.lineId === withoutModalState.lineId
+        item.cartItemId === withoutModalState.cartItemId
           ? { ...item, noIngredients: withoutModalState.selectedWithout }
           : item,
       ),
@@ -617,10 +663,10 @@ export default function KioscoPage() {
     closeWithoutModal();
   };
 
-  const clearWithoutIngredients = (lineId: string) => {
+  const clearWithoutIngredients = (cartItemId: string) => {
     setCartItems((prev) =>
       prev.map((item) =>
-        item.lineId === lineId ? { ...item, noIngredients: [] } : item,
+        item.cartItemId === cartItemId ? { ...item, noIngredients: [] } : item,
       ),
     );
   };
@@ -689,14 +735,31 @@ export default function KioscoPage() {
           customer_name: null,
           customer_phone: null,
           notes: orderNotes.trim() || null,
-          items: cartItems.map((item) => ({
-            product_id: item.productId,
-            name_snapshot: item.name,
-            price_cents_snapshot: item.price_cents,
-            qty: item.qty,
-            station: item.station,
-            notes: formatItemNotes(item) || null,
-          })),
+          items: cartItems.flatMap((item) => {
+            const formattedNotes = formatItemNotes(item) || null;
+
+            if (!formattedNotes || item.qty === 1) {
+              return [
+                {
+                  product_id: item.productId,
+                  name_snapshot: item.name,
+                  price_cents_snapshot: item.priceCents,
+                  qty: item.qty,
+                  station: item.station,
+                  notes: formattedNotes,
+                },
+              ];
+            }
+
+            return Array.from({ length: item.qty }, () => ({
+              product_id: item.productId,
+              name_snapshot: item.name,
+              price_cents_snapshot: item.priceCents,
+              qty: 1,
+              station: item.station,
+              notes: formattedNotes,
+            }));
+          }),
         }),
       });
       const payload = await response.json();
@@ -876,13 +939,13 @@ export default function KioscoPage() {
               <ul className="mt-3 space-y-2 text-base font-semibold text-ink">
                 {orderConfirmation.items.map((item) => (
                   <li
-                    key={item.lineId}
+                    key={item.cartItemId}
                     className="flex items-center justify-between"
                   >
                     <span>
                       {item.qty}× {item.name}
                     </span>
-                    <span>{formatCurrency(item.price_cents * item.qty)}</span>
+                    <span>{formatCurrency(item.priceCents * item.qty)}</span>
                   </li>
                 ))}
               </ul>
@@ -926,7 +989,7 @@ export default function KioscoPage() {
       <div className="space-y-4">
         {cartItems.map((item) => (
           <div
-            key={item.lineId}
+            key={item.cartItemId}
             className="space-y-2 rounded-2xl border border-border bg-surface-2/90 p-4"
           >
             <div className="flex items-center justify-between">
@@ -934,7 +997,7 @@ export default function KioscoPage() {
                 <p className="text-lg font-semibold text-ink">{item.name}</p>
                 <p className="text-sm text-muted">
                   {stationLabels[item.station]} •{" "}
-                  {formatCurrency(item.price_cents)}
+                  {formatCurrency(item.priceCents)}
                 </p>
                 {item.notes.trim() ? (
                   <p className="text-sm text-muted">{item.notes}</p>
@@ -949,7 +1012,7 @@ export default function KioscoPage() {
                 <Button
                   size="md"
                   variant="secondary"
-                  onClick={() => handleQtyChange(item.lineId, -1)}
+                  onClick={() => handleQtyChange(item.cartItemId, -1)}
                   type="button"
                 >
                   -
@@ -957,7 +1020,7 @@ export default function KioscoPage() {
                 <span className="text-lg font-semibold">{item.qty}</span>
                 <Button
                   size="md"
-                  onClick={() => handleQtyChange(item.lineId, 1)}
+                  onClick={() => handleQtyChange(item.cartItemId, 1)}
                   type="button"
                 >
                   +
@@ -998,7 +1061,7 @@ export default function KioscoPage() {
                   size="md"
                   variant="secondary"
                   type="button"
-                  onClick={() => clearWithoutIngredients(item.lineId)}
+                  onClick={() => clearWithoutIngredients(item.cartItemId)}
                 >
                   Limpiar
                 </Button>
@@ -1297,13 +1360,13 @@ export default function KioscoPage() {
             <div className="space-y-2 text-base text-ink">
               {cartItems.map((item) => (
                 <div
-                  key={item.lineId}
+                  key={item.cartItemId}
                   className="flex items-center justify-between"
                 >
                   <span>
                     {item.qty}× {item.name}
                   </span>
-                  <span>{formatCurrency(item.price_cents * item.qty)}</span>
+                  <span>{formatCurrency(item.priceCents * item.qty)}</span>
                 </div>
               ))}
               <div className="flex items-center justify-between text-lg font-bold">
