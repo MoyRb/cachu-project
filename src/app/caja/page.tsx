@@ -19,12 +19,44 @@ const PAYMENT_METHODS = [
 ];
 
 type CashOrderType = "DINEIN" | "TAKEOUT";
+type OrderSourceFilter = "ALL" | "POS" | "WHATSAPP";
+type OrderTypeFilter = "ALL" | "DINEIN" | "TAKEOUT" | "DELIVERY";
 
 const ORDER_TYPE_STORAGE_KEY = "order_type";
 
 const typeLabels: Record<CashOrderType, string> = {
   DINEIN: "Comer aquí",
   TAKEOUT: "Para llevar",
+};
+
+type TodayOrder = {
+  id: number;
+  order_number: number;
+  created_at: string;
+  source: "POS" | "WHATSAPP";
+  type: "DINEIN" | "TAKEOUT" | "DELIVERY";
+  status: string;
+  payment_status: "AWAITING_PAYMENT" | "PAID" | "CANCELLED";
+  total_cents: number;
+};
+
+type TodaySummary = {
+  total_sales_cents: number;
+  total_paid_cents: number;
+  total_pending_cents: number;
+  total_orders: number;
+  paid_orders: number;
+  pending_orders: number;
+  by_source: {
+    POS: {
+      total_sales_cents: number;
+      total_orders: number;
+    };
+    WHATSAPP: {
+      total_sales_cents: number;
+      total_orders: number;
+    };
+  };
 };
 
 const topBarLinkBase =
@@ -36,6 +68,14 @@ const formatCurrency = (valueCents: number) =>
     style: "currency",
     currency: "CLP",
     maximumFractionDigits: 0,
+  }).format(valueCents / 100);
+
+const formatCurrencyMxn = (valueCents: number) =>
+  new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(valueCents / 100);
 
 const resolveOrderTotal = (order: Order) => {
@@ -100,6 +140,12 @@ export default function CajaPage() {
   const [showAlert, setShowAlert] = useState(false);
   const alertTimerRef = useRef<number | null>(null);
   const [orderType, setOrderType] = useState<CashOrderType>("DINEIN");
+  const [todayOrders, setTodayOrders] = useState<TodayOrder[]>([]);
+  const [todaySummary, setTodaySummary] = useState<TodaySummary | null>(null);
+  const [todayLoading, setTodayLoading] = useState(true);
+  const [todayError, setTodayError] = useState<string | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<OrderSourceFilter>("ALL");
+  const [typeFilter, setTypeFilter] = useState<OrderTypeFilter>("ALL");
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -142,9 +188,42 @@ export default function CajaPage() {
     }
   }, [role, userId]);
 
+  const loadTodayPanel = useCallback(async () => {
+    try {
+      setTodayLoading(true);
+      const params = new URLSearchParams();
+      if (sourceFilter !== "ALL") {
+        params.set("source", sourceFilter);
+      }
+      if (typeFilter !== "ALL") {
+        params.set("type", typeFilter);
+      }
+      const query = params.toString();
+      const path = query ? `/api/orders/today?${query}` : "/api/orders/today";
+      const response = await kitchenFetch(path, undefined, { role, userId });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(
+          resolveRequestError(payload, new Error("No se pudo cargar el panel de hoy.")),
+        );
+      }
+      setTodayOrders(payload?.orders ?? []);
+      setTodaySummary(payload?.summary ?? null);
+      setTodayError(null);
+    } catch (panelError) {
+      setTodayError(resolveRequestError(null, panelError));
+    } finally {
+      setTodayLoading(false);
+    }
+  }, [role, sourceFilter, typeFilter, userId]);
+
   useEffect(() => {
     void loadOrders();
   }, [loadOrders]);
+
+  useEffect(() => {
+    void loadTodayPanel();
+  }, [loadTodayPanel]);
 
   useEffect(() => {
     const channel = supabaseBrowser.channel("caja-orders");
@@ -166,6 +245,7 @@ export default function CajaPage() {
         }, 8000);
         playNewOrderSound();
         void loadOrders();
+        void loadTodayPanel();
       },
     );
 
@@ -177,7 +257,7 @@ export default function CajaPage() {
       }
       supabaseBrowser.removeChannel(channel);
     };
-  }, [loadOrders]);
+  }, [loadOrders, loadTodayPanel]);
 
   const sortedOrders = useMemo(() => {
     return [...orders].sort(
@@ -216,7 +296,7 @@ export default function CajaPage() {
           resolveRequestError(payload, new Error("No se pudo marcar como pagada.")),
         );
       }
-      await loadOrders();
+      await Promise.all([loadOrders(), loadTodayPanel()]);
     } catch (payError) {
       setActionError(resolveRequestError(null, payError));
     } finally {
@@ -269,8 +349,144 @@ export default function CajaPage() {
             <Button size="lg" variant="secondary" onClick={loadOrders}>
               Actualizar
             </Button>
+            <Button size="lg" variant="secondary" onClick={loadTodayPanel}>
+              Refrescar hoy
+            </Button>
           </div>
         </TopBar>
+
+        <Card className="space-y-5">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <CardTitle>Pedidos de hoy</CardTitle>
+              <CardDescription>
+                Zona horaria America/Mexico_City · resumen financiero del día
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="text-sm font-semibold text-muted">
+                Source:
+                <select
+                  className="ml-2 h-10 rounded-full border border-border bg-surface px-3 text-sm font-semibold text-ink"
+                  value={sourceFilter}
+                  onChange={(event) =>
+                    setSourceFilter(event.target.value as OrderSourceFilter)
+                  }
+                >
+                  <option value="ALL">All</option>
+                  <option value="POS">POS</option>
+                  <option value="WHATSAPP">WHATSAPP</option>
+                </select>
+              </label>
+              <label className="text-sm font-semibold text-muted">
+                Tipo:
+                <select
+                  className="ml-2 h-10 rounded-full border border-border bg-surface px-3 text-sm font-semibold text-ink"
+                  value={typeFilter}
+                  onChange={(event) =>
+                    setTypeFilter(event.target.value as OrderTypeFilter)
+                  }
+                >
+                  <option value="ALL">All</option>
+                  <option value="TAKEOUT">TAKEOUT</option>
+                  <option value="DELIVERY">DELIVERY</option>
+                  <option value="DINEIN">DINEIN</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          {todayError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+              {todayError}
+            </div>
+          )}
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <Card className="gap-1">
+              <CardDescription>Total ventas</CardDescription>
+              <CardTitle>{formatCurrencyMxn(todaySummary?.total_sales_cents ?? 0)}</CardTitle>
+              <p className="text-sm text-muted">
+                {todaySummary?.total_orders ?? 0} pedidos
+              </p>
+            </Card>
+            <Card className="gap-1">
+              <CardDescription>Total pagado</CardDescription>
+              <CardTitle>{formatCurrencyMxn(todaySummary?.total_paid_cents ?? 0)}</CardTitle>
+              <p className="text-sm text-muted">
+                {todaySummary?.paid_orders ?? 0} pagados
+              </p>
+            </Card>
+            <Card className="gap-1">
+              <CardDescription>Total pendiente</CardDescription>
+              <CardTitle>{formatCurrencyMxn(todaySummary?.total_pending_cents ?? 0)}</CardTitle>
+              <p className="text-sm text-muted">
+                {todaySummary?.pending_orders ?? 0} pendientes
+              </p>
+            </Card>
+            <Card className="gap-1">
+              <CardDescription>POS vs WHATSAPP</CardDescription>
+              <CardTitle className="text-lg">
+                POS {todaySummary?.by_source?.POS.total_orders ?? 0} · WA{" "}
+                {todaySummary?.by_source?.WHATSAPP.total_orders ?? 0}
+              </CardTitle>
+              <p className="text-sm text-muted">
+                {formatCurrencyMxn(todaySummary?.by_source?.POS.total_sales_cents ?? 0)} /{" "}
+                {formatCurrencyMxn(todaySummary?.by_source?.WHATSAPP.total_sales_cents ?? 0)}
+              </p>
+            </Card>
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-border">
+            <table className="min-w-full text-left text-sm">
+              <thead className="bg-surface-2 text-xs uppercase tracking-wide text-muted">
+                <tr>
+                  <th className="px-3 py-2">Orden</th>
+                  <th className="px-3 py-2">Creado</th>
+                  <th className="px-3 py-2">Source</th>
+                  <th className="px-3 py-2">Tipo</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2">Pago</th>
+                  <th className="px-3 py-2 text-right">Total MXN</th>
+                </tr>
+              </thead>
+              <tbody>
+                {todayOrders.map((order) => (
+                  <tr key={order.id} className="border-t border-border">
+                    <td className="px-3 py-2 font-semibold text-ink">#{order.order_number}</td>
+                    <td className="px-3 py-2 text-muted">
+                      {new Date(order.created_at).toLocaleString("es-MX", {
+                        timeZone: "America/Mexico_City",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        day: "2-digit",
+                        month: "2-digit",
+                      })}
+                    </td>
+                    <td className="px-3 py-2 text-ink">{order.source}</td>
+                    <td className="px-3 py-2 text-ink">{order.type}</td>
+                    <td className="px-3 py-2 text-ink">{order.status}</td>
+                    <td className="px-3 py-2 text-ink">{order.payment_status}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-ink">
+                      {formatCurrencyMxn(order.total_cents)}
+                    </td>
+                  </tr>
+                ))}
+                {!todayLoading && todayOrders.length === 0 && (
+                  <tr>
+                    <td className="px-3 py-5 text-center text-muted" colSpan={7}>
+                      No hay pedidos para hoy con los filtros seleccionados.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {todayLoading && (
+            <p className="text-sm font-semibold text-muted">Cargando panel de hoy...</p>
+          )}
+        </Card>
 
         {showAlert && (
           <div className="rounded-2xl border border-cta/40 bg-cta/10 px-6 py-4 text-lg font-semibold text-ink">
