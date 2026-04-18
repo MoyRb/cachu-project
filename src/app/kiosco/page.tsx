@@ -37,6 +37,7 @@ type CartItem = {
   qty: number;
   notes: string;
   noIngredients: string[];
+  ingredientMode: "SIN" | "CON";
   isAlitas: boolean;
   isIngredientCustomized: boolean;
 };
@@ -94,19 +95,49 @@ const formatNotesFromWithout = (list: string[]): string => {
   return `SIN: ${formatted.join(", ")}`;
 };
 
+const formatNotesFromWith = (list: string[]): string => {
+  if (list.length === 0) {
+    return "";
+  }
+
+  return `CON: ${list.join(", ")}`;
+};
+
+const normalizeCategoryName = (category: Product["category"]) =>
+  (typeof category === "string" ? category : category?.name ?? "").trim();
+
+const isHamburguesasCategory = (categoryName: string) =>
+  categoryName.toLowerCase() === "hamburguesas";
+
 const formatItemNotes = (item: CartItem): string => {
-  const withoutNotes = formatNotesFromWithout(item.noIngredients);
+  const ingredientNotes =
+    item.ingredientMode === "CON"
+      ? formatNotesFromWith(item.noIngredients)
+      : formatNotesFromWithout(item.noIngredients);
   const currentNotes = item.notes.trim();
 
-  if (!withoutNotes) {
+  if (!ingredientNotes) {
     return currentNotes;
   }
 
-  return currentNotes ? `${currentNotes} | ${withoutNotes}` : withoutNotes;
+  return currentNotes ? `${currentNotes} | ${ingredientNotes}` : ingredientNotes;
 };
 
 const hasItemCustomization = (item: CartItem) =>
   item.notes.trim().length > 0 || item.noIngredients.length > 0;
+
+const sortIngredientsByOptionOrder = (ingredients: string[]) => {
+  const seen = new Set<string>();
+  const selected = new Set(ingredients);
+
+  return WITHOUT_INGREDIENT_OPTIONS.filter((option) => {
+    if (!selected.has(option) || seen.has(option)) {
+      return false;
+    }
+    seen.add(option);
+    return true;
+  });
+};
 
 const PRODUCT_CUSTOMIZATION_RULES: Record<string, IngredientCustomizationRule> = {
   "Torta Sencilla": { requiredCount: 1 },
@@ -365,6 +396,7 @@ export default function KioscoPage() {
           qty: 1,
           notes,
           noIngredients: [],
+          ingredientMode: "SIN",
           isAlitas: true,
           isIngredientCustomized: false,
         },
@@ -466,6 +498,7 @@ export default function KioscoPage() {
           qty: 1,
           notes,
           noIngredients: [],
+          ingredientMode: "SIN",
           isAlitas: false,
           isIngredientCustomized: true,
         },
@@ -570,6 +603,9 @@ export default function KioscoPage() {
           qty: 1,
           notes: "",
           noIngredients: [],
+          ingredientMode: isHamburguesasCategory(normalizeCategoryName(product.category))
+            ? "CON"
+            : "SIN",
           isAlitas: false,
           isIngredientCustomized: false,
         },
@@ -627,7 +663,7 @@ export default function KioscoPage() {
 
     setWithoutModalState({
       cartItemId: targetCartItemId,
-      selectedWithout: [...targetItem.noIngredients],
+      selectedWithout: sortIngredientsByOptionOrder(targetItem.noIngredients),
     });
   };
 
@@ -659,7 +695,12 @@ export default function KioscoPage() {
     setCartItems((prev) =>
       prev.map((item) =>
         item.cartItemId === withoutModalState.cartItemId
-          ? { ...item, noIngredients: withoutModalState.selectedWithout }
+          ? {
+              ...item,
+              noIngredients: sortIngredientsByOptionOrder(
+                withoutModalState.selectedWithout,
+              ),
+            }
           : item,
       ),
     );
@@ -1007,7 +1048,9 @@ export default function KioscoPage() {
                 ) : null}
                 {item.noIngredients.length > 0 ? (
                   <p className="text-sm text-muted">
-                    {formatNotesFromWithout(item.noIngredients)}
+                    {item.ingredientMode === "CON"
+                      ? formatNotesFromWith(item.noIngredients)
+                      : formatNotesFromWithout(item.noIngredients)}
                   </p>
                 ) : null}
               </div>
@@ -1074,6 +1117,11 @@ export default function KioscoPage() {
         ))}
       </div>
     );
+
+  const withoutModalItem = withoutModalState
+    ? cartItems.find((item) => item.cartItemId === withoutModalState.cartItemId) ?? null
+    : null;
+  const withoutModalPrefix = withoutModalItem?.ingredientMode === "CON" ? "CON" : "SIN";
 
   return (
     <div className="min-h-screen bg-transparent px-6 pb-28 pt-10 text-ink sm:px-10 md:pb-10">
@@ -1408,9 +1456,15 @@ export default function KioscoPage() {
           <ModalPanel className="max-w-xl space-y-5">
             <div>
               <p className="text-sm font-semibold uppercase tracking-wide text-muted">
-                Quitar ingredientes
+                {withoutModalPrefix === "CON"
+                  ? "Personalizar ingredientes"
+                  : "Quitar ingredientes"}
               </p>
-              <h2 className="text-2xl font-bold text-ink">Selecciona lo que va SIN</h2>
+              <h2 className="text-2xl font-bold text-ink">
+                {withoutModalPrefix === "CON"
+                  ? "Selecciona lo que va CON"
+                  : "Selecciona lo que va SIN"}
+              </h2>
             </div>
             <div className="flex flex-wrap gap-3">
               {WITHOUT_INGREDIENT_OPTIONS.map((ingredient) => {
@@ -1426,7 +1480,7 @@ export default function KioscoPage() {
                         : "border-border bg-surface-2 text-ink hover:bg-surface"
                     }`}
                   >
-                    SIN {ingredient}
+                    {withoutModalPrefix} {ingredient}
                   </button>
                 );
               })}
