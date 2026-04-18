@@ -283,7 +283,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const deliveryFee = Number.isInteger(delivery_fee_cents) ? Number(delivery_fee_cents) : 0;
+    if (delivery_fee_cents !== undefined && !Number.isInteger(delivery_fee_cents)) {
+      return jsonError('Invalid delivery fee');
+    }
+    if (Number.isInteger(delivery_fee_cents) && Number(delivery_fee_cents) < 0) {
+      return jsonError('Invalid delivery fee');
+    }
+    const deliveryFeeApplies = type === 'DELIVERY' || type === 'TAKEOUT';
+    const deliveryFee = deliveryFeeApplies
+      ? Number.isInteger(delivery_fee_cents)
+        ? Number(delivery_fee_cents)
+        : 0
+      : 0;
     const subtotal = rpcItems.reduce(
       (sum: number, item: RpcOrderItemInput) => sum + item.price_cents_snapshot * item.qty,
       0
