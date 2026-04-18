@@ -37,6 +37,7 @@ type CartItem = {
   qty: number;
   notes: string;
   noIngredients: string[];
+  withIngredients: string[];
   ingredientMode: "SIN" | "CON";
   isAlitas: boolean;
   isIngredientCustomized: boolean;
@@ -110,10 +111,18 @@ const isHamburguesasCategory = (categoryName: string) =>
   categoryName.toLowerCase() === "hamburguesas";
 
 const formatItemNotes = (item: CartItem): string => {
-  const ingredientNotes =
-    item.ingredientMode === "CON"
-      ? formatNotesFromWith(item.noIngredients)
-      : formatNotesFromWithout(item.noIngredients);
+  const sinIngredients = sortIngredientsByOptionOrder(item.noIngredients);
+  const withCandidates =
+    item.withIngredients.length > 0
+      ? sortIngredientsByOptionOrder(item.withIngredients)
+      : item.ingredientMode === "CON"
+        ? sortIngredientsByOptionOrder(item.noIngredients)
+        : [];
+  const sinSet = new Set(sinIngredients);
+  const withIngredients = withCandidates.filter((ingredient) => !sinSet.has(ingredient));
+  const notesParts = [formatNotesFromWithout(sinIngredients), formatNotesFromWith(withIngredients)]
+    .filter((part) => part.length > 0);
+  const ingredientNotes = notesParts.join(" | ");
   const currentNotes = item.notes.trim();
 
   if (!ingredientNotes) {
@@ -234,6 +243,8 @@ export default function KioscoPage() {
   const [withoutModalState, setWithoutModalState] = useState<{
     cartItemId: string;
     selectedWithout: string[];
+    selectedWith: string[];
+    isHamburguesa: boolean;
   } | null>(null);
   const [alitasSelectorState, setAlitasSelectorState] = useState<{
     mode: "add" | "edit";
@@ -396,6 +407,7 @@ export default function KioscoPage() {
           qty: 1,
           notes,
           noIngredients: [],
+          withIngredients: [],
           ingredientMode: "SIN",
           isAlitas: true,
           isIngredientCustomized: false,
@@ -498,6 +510,7 @@ export default function KioscoPage() {
           qty: 1,
           notes,
           noIngredients: [],
+          withIngredients: [],
           ingredientMode: "SIN",
           isAlitas: false,
           isIngredientCustomized: true,
@@ -603,6 +616,7 @@ export default function KioscoPage() {
           qty: 1,
           notes: "",
           noIngredients: [],
+          withIngredients: [],
           ingredientMode: isHamburguesasCategory(normalizeCategoryName(product.category))
             ? "CON"
             : "SIN",
@@ -661,9 +675,20 @@ export default function KioscoPage() {
     const targetItem =
       cartItems.find((cartItem) => cartItem.cartItemId === targetCartItemId) ?? item;
 
+    const product = products.find((productItem) => productItem.id === targetItem.productId);
+    const isHamburguesa = isHamburguesasCategory(normalizeCategoryName(product?.category ?? null));
+    const selectedWith =
+      targetItem.withIngredients.length > 0
+        ? sortIngredientsByOptionOrder(targetItem.withIngredients)
+        : targetItem.ingredientMode === "CON"
+          ? sortIngredientsByOptionOrder(targetItem.noIngredients)
+          : [];
+
     setWithoutModalState({
       cartItemId: targetCartItemId,
       selectedWithout: sortIngredientsByOptionOrder(targetItem.noIngredients),
+      selectedWith,
+      isHamburguesa,
     });
   };
 
@@ -678,11 +703,33 @@ export default function KioscoPage() {
       }
 
       const exists = prev.selectedWithout.includes(ingredient);
+      const nextWithout = exists
+        ? prev.selectedWithout.filter((item) => item !== ingredient)
+        : [...prev.selectedWithout, ingredient];
+
       return {
         ...prev,
-        selectedWithout: exists
-          ? prev.selectedWithout.filter((item) => item !== ingredient)
-          : [...prev.selectedWithout, ingredient],
+        selectedWithout: nextWithout,
+        selectedWith: prev.selectedWith.filter((item) => item !== ingredient),
+      };
+    });
+  };
+
+  const toggleWithIngredient = (ingredient: string) => {
+    setWithoutModalState((prev) => {
+      if (!prev) {
+        return prev;
+      }
+
+      const exists = prev.selectedWith.includes(ingredient);
+      const nextWith = exists
+        ? prev.selectedWith.filter((item) => item !== ingredient)
+        : [...prev.selectedWith, ingredient];
+
+      return {
+        ...prev,
+        selectedWith: nextWith,
+        selectedWithout: prev.selectedWithout.filter((item) => item !== ingredient),
       };
     });
   };
@@ -697,9 +744,14 @@ export default function KioscoPage() {
         item.cartItemId === withoutModalState.cartItemId
           ? {
               ...item,
-              noIngredients: sortIngredientsByOptionOrder(
-                withoutModalState.selectedWithout,
-              ),
+              noIngredients: sortIngredientsByOptionOrder(withoutModalState.selectedWithout),
+              withIngredients: withoutModalState.isHamburguesa
+                ? sortIngredientsByOptionOrder(withoutModalState.selectedWith).filter(
+                    (ingredient) =>
+                      !withoutModalState.selectedWithout.includes(ingredient),
+                  )
+                : [],
+              ingredientMode: "SIN",
             }
           : item,
       ),
@@ -710,7 +762,9 @@ export default function KioscoPage() {
   const clearWithoutIngredients = (cartItemId: string) => {
     setCartItems((prev) =>
       prev.map((item) =>
-        item.cartItemId === cartItemId ? { ...item, noIngredients: [] } : item,
+        item.cartItemId === cartItemId
+          ? { ...item, noIngredients: [], withIngredients: [], ingredientMode: "SIN" }
+          : item,
       ),
     );
   };
@@ -1048,9 +1102,16 @@ export default function KioscoPage() {
                 ) : null}
                 {item.noIngredients.length > 0 ? (
                   <p className="text-sm text-muted">
-                    {item.ingredientMode === "CON"
-                      ? formatNotesFromWith(item.noIngredients)
-                      : formatNotesFromWithout(item.noIngredients)}
+                    {formatNotesFromWithout(sortIngredientsByOptionOrder(item.noIngredients))}
+                  </p>
+                ) : null}
+                {item.withIngredients.length > 0 ? (
+                  <p className="text-sm text-muted">
+                    {formatNotesFromWith(
+                      sortIngredientsByOptionOrder(item.withIngredients).filter(
+                        (ingredient) => !item.noIngredients.includes(ingredient),
+                      ),
+                    )}
                   </p>
                 ) : null}
               </div>
@@ -1456,35 +1517,95 @@ export default function KioscoPage() {
           <ModalPanel className="max-w-xl space-y-5">
             <div>
               <p className="text-sm font-semibold uppercase tracking-wide text-muted">
-                {withoutModalPrefix === "CON"
-                  ? "Personalizar ingredientes"
-                  : "Quitar ingredientes"}
+                {withoutModalState.isHamburguesa
+                  ? "Personalizar hamburguesa"
+                  : withoutModalPrefix === "CON"
+                    ? "Personalizar ingredientes"
+                    : "Quitar ingredientes"}
               </p>
               <h2 className="text-2xl font-bold text-ink">
-                {withoutModalPrefix === "CON"
-                  ? "Selecciona lo que va CON"
-                  : "Selecciona lo que va SIN"}
+                {withoutModalState.isHamburguesa
+                  ? "Personaliza ingredientes"
+                  : withoutModalPrefix === "CON"
+                    ? "Selecciona lo que va CON"
+                    : "Selecciona lo que va SIN"}
               </h2>
             </div>
-            <div className="flex flex-wrap gap-3">
-              {WITHOUT_INGREDIENT_OPTIONS.map((ingredient) => {
-                const isSelected = withoutModalState.selectedWithout.includes(ingredient);
-                return (
-                  <button
-                    key={ingredient}
-                    type="button"
-                    onClick={() => toggleWithoutIngredient(ingredient)}
-                    className={`min-h-11 rounded-full border px-4 text-base font-semibold transition-colors ${
-                      isSelected
-                        ? "border-cta bg-cta text-on-primary"
-                        : "border-border bg-surface-2 text-ink hover:bg-surface"
-                    }`}
-                  >
-                    {withoutModalPrefix} {ingredient}
-                  </button>
-                );
-              })}
-            </div>
+            {withoutModalState.isHamburguesa ? (
+              <div className="space-y-5">
+                <div className="space-y-3">
+                  <p className="text-sm font-semibold uppercase tracking-wide text-muted">
+                    QUITAR INGREDIENTES — Selecciona lo que va SIN
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    {WITHOUT_INGREDIENT_OPTIONS.map((ingredient) => {
+                      const isSelected = withoutModalState.selectedWithout.includes(ingredient);
+                      return (
+                        <button
+                          key={`without-${ingredient}`}
+                          type="button"
+                          onClick={() => toggleWithoutIngredient(ingredient)}
+                          className={`min-h-11 rounded-full border px-4 text-base font-semibold transition-colors ${
+                            isSelected
+                              ? "border-cta bg-cta text-on-primary"
+                              : "border-border bg-surface-2 text-ink hover:bg-surface"
+                          }`}
+                        >
+                          SIN {ingredient}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <p className="text-sm font-semibold uppercase tracking-wide text-muted">
+                    AGREGAR / SOLO CON — Selecciona lo que va CON
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    {WITHOUT_INGREDIENT_OPTIONS.map((ingredient) => {
+                      const isSelected = withoutModalState.selectedWith.includes(ingredient);
+                      return (
+                        <button
+                          key={`with-${ingredient}`}
+                          type="button"
+                          onClick={() => toggleWithIngredient(ingredient)}
+                          className={`min-h-11 rounded-full border px-4 text-base font-semibold transition-colors ${
+                            isSelected
+                              ? "border-cta bg-cta text-on-primary"
+                              : "border-border bg-surface-2 text-ink hover:bg-surface"
+                          }`}
+                        >
+                          CON {ingredient}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <p className="text-sm text-muted">
+                  Si eliges un ingrediente en ambos grupos, se mantiene en SIN.
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-3">
+                {WITHOUT_INGREDIENT_OPTIONS.map((ingredient) => {
+                  const isSelected = withoutModalState.selectedWithout.includes(ingredient);
+                  return (
+                    <button
+                      key={ingredient}
+                      type="button"
+                      onClick={() => toggleWithoutIngredient(ingredient)}
+                      className={`min-h-11 rounded-full border px-4 text-base font-semibold transition-colors ${
+                        isSelected
+                          ? "border-cta bg-cta text-on-primary"
+                          : "border-border bg-surface-2 text-ink hover:bg-surface"
+                      }`}
+                    >
+                      {withoutModalPrefix} {ingredient}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <div className="flex flex-wrap gap-3">
               <Button
                 size="lg"
