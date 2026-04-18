@@ -14,7 +14,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { TopBar } from "@/components/ui/TopBar";
 import { printRawBT } from "@/lib/printing/rawbt";
 
-type OrderType = "DINEIN" | "TAKEOUT";
+type OrderType = "DINEIN" | "TAKEOUT" | "DELIVERY";
 type Station = "PLANCHA" | "FREIDORA";
 
 type Product = {
@@ -208,6 +208,7 @@ const stationLabels: Record<Station, string> = {
 const typeLabels: Record<OrderType, string> = {
   DINEIN: "Comer aquí",
   TAKEOUT: "Para llevar",
+  DELIVERY: "A domicilio",
 };
 
 const formatCurrency = (valueCents: number) =>
@@ -216,6 +217,27 @@ const formatCurrency = (valueCents: number) =>
     currency: "MXN",
     maximumFractionDigits: 0,
   }).format(valueCents / 100);
+
+const SHIPPING_ORDER_TYPES: OrderType[] = ["TAKEOUT", "DELIVERY"];
+
+const isShippingOrderType = (type: OrderType | null) =>
+  type !== null && SHIPPING_ORDER_TYPES.includes(type);
+
+const parseDeliveryFeeToCents = (value: string): number | null => {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return 0;
+  }
+  const normalized = trimmed.replace(",", ".");
+  if (!/^\d+(\.\d{0,2})?$/u.test(normalized)) {
+    return null;
+  }
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return null;
+  }
+  return Math.round(parsed * 100);
+};
 
 const createCartItemId = () =>
   typeof globalThis.crypto?.randomUUID === "function"
@@ -236,6 +258,7 @@ export default function KioscoPage() {
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [orderNotes, setOrderNotes] = useState("");
+  const [deliveryFeeInput, setDeliveryFeeInput] = useState("");
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isCartSheetOpen, setIsCartSheetOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -381,6 +404,15 @@ export default function KioscoPage() {
       ),
     [cartItems],
   );
+  const deliveryFeeCents = useMemo(
+    () => (isShippingOrderType(orderType) ? parseDeliveryFeeToCents(deliveryFeeInput) ?? 0 : 0),
+    [deliveryFeeInput, orderType],
+  );
+  const totalCents = subtotalCents + deliveryFeeCents;
+  const deliveryFeeError =
+    isShippingOrderType(orderType) && parseDeliveryFeeToCents(deliveryFeeInput) === null
+      ? "Ingresa un costo válido (ej. 25.00)."
+      : null;
 
   const handleAddAlitasWithFlavor = (product: Product, flavor: string) => {
     const notes = buildFlavorNote(flavor);
@@ -773,6 +805,7 @@ export default function KioscoPage() {
     setOrderType(null);
     setCartItems([]);
     setOrderNotes("");
+    setDeliveryFeeInput("");
     setOrderConfirmation(null);
     setSubmitError(null);
     setPrintError(null);
@@ -821,6 +854,10 @@ export default function KioscoPage() {
     if (!orderType || cartItems.length === 0) {
       return;
     }
+    if (deliveryFeeError) {
+      setSubmitError(deliveryFeeError);
+      return;
+    }
     setIsSubmitting(true);
     setSubmitError(null);
 
@@ -833,6 +870,7 @@ export default function KioscoPage() {
           customer_name: null,
           customer_phone: null,
           notes: orderNotes.trim() || null,
+          delivery_fee_cents: deliveryFeeCents,
           items: cartItems.flatMap((item) => {
             const formattedNotes = formatItemNotes(item) || null;
 
@@ -889,6 +927,7 @@ export default function KioscoPage() {
 
       setCartItems([]);
       setOrderNotes("");
+      setDeliveryFeeInput("");
       setIsConfirmOpen(false);
       setIsCartSheetOpen(false);
     } catch (error) {
@@ -1309,11 +1348,38 @@ export default function KioscoPage() {
                   <span>Subtotal</span>
                   <span>{formatCurrency(subtotalCents)}</span>
                 </div>
+                {isShippingOrderType(orderType) ? (
+                  <div className="flex items-center justify-between">
+                    <span>Costo de envío</span>
+                    <span>{formatCurrency(deliveryFeeCents)}</span>
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-between text-xl font-bold">
                   <span>Total</span>
-                  <span>{formatCurrency(subtotalCents)}</span>
+                  <span>{formatCurrency(totalCents)}</span>
                 </div>
               </div>
+              {isShippingOrderType(orderType) ? (
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-muted">
+                    Costo de envío
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    inputMode="decimal"
+                    placeholder="25.00"
+                    value={deliveryFeeInput}
+                    onChange={(event) => setDeliveryFeeInput(event.target.value)}
+                  />
+                  {deliveryFeeError ? (
+                    <p className="text-sm font-semibold text-rose-700">
+                      {deliveryFeeError}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
               <Input
                 placeholder="Notas generales del pedido"
                 value={orderNotes}
@@ -1355,7 +1421,7 @@ export default function KioscoPage() {
               Carrito
             </p>
             <p className="text-sm font-semibold text-ink">
-              {cartCount} items · {formatCurrency(subtotalCents)}
+              {cartCount} items · {formatCurrency(totalCents)}
             </p>
           </div>
           <Button
@@ -1418,11 +1484,38 @@ export default function KioscoPage() {
                     <span>Subtotal</span>
                     <span>{formatCurrency(subtotalCents)}</span>
                   </div>
+                  {isShippingOrderType(orderType) ? (
+                    <div className="flex items-center justify-between">
+                      <span>Costo de envío</span>
+                      <span>{formatCurrency(deliveryFeeCents)}</span>
+                    </div>
+                  ) : null}
                   <div className="flex items-center justify-between text-xl font-bold">
                     <span>Total</span>
-                    <span>{formatCurrency(subtotalCents)}</span>
+                    <span>{formatCurrency(totalCents)}</span>
                   </div>
                 </div>
+                {isShippingOrderType(orderType) ? (
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-muted">
+                      Costo de envío
+                    </label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      inputMode="decimal"
+                      placeholder="25.00"
+                      value={deliveryFeeInput}
+                      onChange={(event) => setDeliveryFeeInput(event.target.value)}
+                    />
+                    {deliveryFeeError ? (
+                      <p className="text-sm font-semibold text-rose-700">
+                        {deliveryFeeError}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
                 <Input
                   placeholder="Notas generales del pedido"
                   value={orderNotes}
@@ -1481,9 +1574,15 @@ export default function KioscoPage() {
                   <span>{formatCurrency(item.priceCents * item.qty)}</span>
                 </div>
               ))}
+              {isShippingOrderType(orderType) ? (
+                <div className="flex items-center justify-between">
+                  <span>Costo de envío</span>
+                  <span>{formatCurrency(deliveryFeeCents)}</span>
+                </div>
+              ) : null}
               <div className="flex items-center justify-between text-lg font-bold">
                 <span>Total</span>
-                <span>{formatCurrency(subtotalCents)}</span>
+                <span>{formatCurrency(totalCents)}</span>
               </div>
             </div>
             {submitError ? (
