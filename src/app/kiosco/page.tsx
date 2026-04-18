@@ -1514,7 +1514,7 @@ export default function KioscoPage() {
 
       {withoutModalState ? (
         <Modal onClose={closeWithoutModal}>
-          <ModalPanel className="max-w-xl space-y-5">
+          <ModalPanel className="flex max-h-[85vh] max-w-xl flex-col gap-5 overflow-hidden">
             <div>
               <p className="text-sm font-semibold uppercase tracking-wide text-muted">
                 {withoutModalState.isHamburguesa
@@ -1531,82 +1531,84 @@ export default function KioscoPage() {
                     : "Selecciona lo que va SIN"}
               </h2>
             </div>
-            {withoutModalState.isHamburguesa ? (
-              <div className="space-y-5">
-                <div className="space-y-3">
-                  <p className="text-sm font-semibold uppercase tracking-wide text-muted">
-                    QUITAR INGREDIENTES — Selecciona lo que va SIN
-                  </p>
-                  <div className="flex flex-wrap gap-3">
-                    {WITHOUT_INGREDIENT_OPTIONS.map((ingredient) => {
-                      const isSelected = withoutModalState.selectedWithout.includes(ingredient);
-                      return (
-                        <button
-                          key={`without-${ingredient}`}
-                          type="button"
-                          onClick={() => toggleWithoutIngredient(ingredient)}
-                          className={`min-h-11 rounded-full border px-4 text-base font-semibold transition-colors ${
-                            isSelected
-                              ? "border-cta bg-cta text-on-primary"
-                              : "border-border bg-surface-2 text-ink hover:bg-surface"
-                          }`}
-                        >
-                          SIN {ingredient}
-                        </button>
-                      );
-                    })}
+            <div className="flex-1 overflow-y-auto pr-1 pb-2">
+              {withoutModalState.isHamburguesa ? (
+                <div className="space-y-5 pb-4">
+                  <div className="space-y-3">
+                    <p className="text-sm font-semibold uppercase tracking-wide text-muted">
+                      QUITAR INGREDIENTES — Selecciona lo que va SIN
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      {WITHOUT_INGREDIENT_OPTIONS.map((ingredient) => {
+                        const isSelected = withoutModalState.selectedWithout.includes(ingredient);
+                        return (
+                          <button
+                            key={`without-${ingredient}`}
+                            type="button"
+                            onClick={() => toggleWithoutIngredient(ingredient)}
+                            className={`min-h-11 rounded-full border px-4 text-base font-semibold transition-colors ${
+                              isSelected
+                                ? "border-cta bg-cta text-on-primary"
+                                : "border-border bg-surface-2 text-ink hover:bg-surface"
+                            }`}
+                          >
+                            SIN {ingredient}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-                <div className="space-y-3">
-                  <p className="text-sm font-semibold uppercase tracking-wide text-muted">
-                    AGREGAR / SOLO CON — Selecciona lo que va CON
-                  </p>
-                  <div className="flex flex-wrap gap-3">
-                    {WITHOUT_INGREDIENT_OPTIONS.map((ingredient) => {
-                      const isSelected = withoutModalState.selectedWith.includes(ingredient);
-                      return (
-                        <button
-                          key={`with-${ingredient}`}
-                          type="button"
-                          onClick={() => toggleWithIngredient(ingredient)}
-                          className={`min-h-11 rounded-full border px-4 text-base font-semibold transition-colors ${
-                            isSelected
-                              ? "border-cta bg-cta text-on-primary"
-                              : "border-border bg-surface-2 text-ink hover:bg-surface"
-                          }`}
-                        >
-                          CON {ingredient}
-                        </button>
-                      );
-                    })}
+                  <div className="space-y-3">
+                    <p className="text-sm font-semibold uppercase tracking-wide text-muted">
+                      AGREGAR / SOLO CON — Selecciona lo que va CON
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      {WITHOUT_INGREDIENT_OPTIONS.map((ingredient) => {
+                        const isSelected = withoutModalState.selectedWith.includes(ingredient);
+                        return (
+                          <button
+                            key={`with-${ingredient}`}
+                            type="button"
+                            onClick={() => toggleWithIngredient(ingredient)}
+                            className={`min-h-11 rounded-full border px-4 text-base font-semibold transition-colors ${
+                              isSelected
+                                ? "border-cta bg-cta text-on-primary"
+                                : "border-border bg-surface-2 text-ink hover:bg-surface"
+                            }`}
+                          >
+                            CON {ingredient}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
+                  <p className="text-sm text-muted">
+                    Si eliges un ingrediente en ambos grupos, se mantiene en SIN.
+                  </p>
                 </div>
-                <p className="text-sm text-muted">
-                  Si eliges un ingrediente en ambos grupos, se mantiene en SIN.
-                </p>
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-3">
-                {WITHOUT_INGREDIENT_OPTIONS.map((ingredient) => {
-                  const isSelected = withoutModalState.selectedWithout.includes(ingredient);
-                  return (
-                    <button
-                      key={ingredient}
-                      type="button"
-                      onClick={() => toggleWithoutIngredient(ingredient)}
-                      className={`min-h-11 rounded-full border px-4 text-base font-semibold transition-colors ${
-                        isSelected
-                          ? "border-cta bg-cta text-on-primary"
-                          : "border-border bg-surface-2 text-ink hover:bg-surface"
-                      }`}
-                    >
-                      {withoutModalPrefix} {ingredient}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            <div className="flex flex-wrap gap-3">
+              ) : (
+                <div className="flex flex-wrap gap-3 pb-4">
+                  {WITHOUT_INGREDIENT_OPTIONS.map((ingredient) => {
+                    const isSelected = withoutModalState.selectedWithout.includes(ingredient);
+                    return (
+                      <button
+                        key={ingredient}
+                        type="button"
+                        onClick={() => toggleWithoutIngredient(ingredient)}
+                        className={`min-h-11 rounded-full border px-4 text-base font-semibold transition-colors ${
+                          isSelected
+                            ? "border-cta bg-cta text-on-primary"
+                            : "border-border bg-surface-2 text-ink hover:bg-surface"
+                        }`}
+                      >
+                        {withoutModalPrefix} {ingredient}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="sticky bottom-0 -mx-5 mt-1 flex flex-wrap gap-3 border-t border-border bg-surface px-5 py-3">
               <Button
                 size="lg"
                 onClick={closeWithoutModal}
