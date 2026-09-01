@@ -10,6 +10,7 @@ import { TopBar } from "@/components/ui/TopBar";
 import { useKitchenRole } from "@/hooks/useKitchenRole";
 import { kitchenFetch } from "@/lib/kitchen/fetch";
 import type { Order } from "@/lib/kitchen/types";
+import { printRawBT } from "@/lib/printing/rawbt";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -23,10 +24,24 @@ type OrderSourceFilter = "ALL" | "POS" | "WHATSAPP";
 type OrderTypeFilter = "ALL" | "DINEIN" | "TAKEOUT" | "DELIVERY";
 
 const ORDER_TYPE_STORAGE_KEY = "order_type";
+const AUDIO_ENABLED_STORAGE_KEY = "cachu-audio-enabled";
 
 const typeLabels: Record<CashOrderType, string> = {
   DINEIN: "Comer aquí",
   TAKEOUT: "Para llevar",
+};
+
+const alertTypeLabels: Record<string, string> = {
+  DINEIN: "Comer aquí",
+  TAKEOUT: "Para llevar / Recoger",
+  DELIVERY: "A domicilio",
+};
+
+type AlertOrder = {
+  id: number;
+  order_number: number;
+  type: string;
+  total_cents: number;
 };
 
 type TodayOrder = {
@@ -87,37 +102,30 @@ const resolveOrderTotal = (order: Order) => {
   return subtotal + deliveryFee;
 };
 
-const playNewOrderSound = () => {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    const AudioContextClass =
-      window.AudioContext ||
-      (window as typeof window & { webkitAudioContext?: typeof AudioContext })
-        .webkitAudioContext;
-    if (!AudioContextClass) {
-      return;
-    }
-    const audioContext = new AudioContextClass();
-    const oscillator = audioContext.createOscillator();
-    const gain = audioContext.createGain();
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
-    gain.gain.setValueAtTime(0.2, audioContext.currentTime);
-    oscillator.connect(gain);
-    gain.connect(audioContext.destination);
-    oscillator.start();
-    oscillator.stop(audioContext.currentTime + 0.4);
-    oscillator.onended = () => {
-      void audioContext.close();
-    };
-  } catch (error) {
-    if (process.env.NODE_ENV === "development") {
-      console.log("[caja] audio error:", error);
-    }
-  }
+const playNewOrderTones = (ctx: AudioContext) => {
+  // Secuencia de 3 tonos reconocibles: do-mi-do
+  const tones = [880, 1100, 880];
+  const toneDuration = 0.13;
+  const gapBetween = 0.07;
+  tones.forEach((freq, i) => {
+    const t0 = ctx.currentTime + i * (toneDuration + gapBetween);
+    try {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, t0);
+      gain.gain.setValueAtTime(0, t0);
+      gain.gain.linearRampToValueAtTime(0.3, t0 + 0.01);
+      gain.gain.linearRampToValueAtTime(0, t0 + toneDuration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + toneDuration);
+      osc.onended = () => {
+        try { osc.disconnect(); gain.disconnect(); } catch { /* ignore */ }
+      };
+    } catch { /* ignore per-tone errors */ }
+  });
 };
 
 const resolveRequestError = (data: unknown, err: unknown) =>
@@ -137,8 +145,14 @@ export default function CajaPage() {
   const [methodByOrder, setMethodByOrder] = useState<Record<number, string>>(
     {},
   );
-  const [showAlert, setShowAlert] = useState(false);
+  const [alertOrder, setAlertOrder] = useState<AlertOrder | null>(null);
+  const [isPrintingAlert, setIsPrintingAlert] = useState(false);
+  const [printAlertError, setPrintAlertError] = useState<string | null>(null);
+  const [audioEnabled, setAudioEnabled] = useState(false);
   const alertTimerRef = useRef<number | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioEnabledRef = useRef(false);
+  const notifiedOrderIdsRef = useRef<Set<number>>(new Set());
   const [orderType, setOrderType] = useState<CashOrderType>("DINEIN");
   const [todayOrders, setTodayOrders] = useState<TodayOrder[]>([]);
   const [todaySummary, setTodaySummary] = useState<TodaySummary | null>(null);
@@ -156,6 +170,13 @@ export default function CajaPage() {
     if (storedOrderType === "DINEIN" || storedOrderType === "TAKEOUT") {
       setOrderType(storedOrderType);
     }
+
+    // Restaurar preferencia de audio (aún necesita interacción del usuario para desbloquear).
+    const storedAudio = window.localStorage.getItem(AUDIO_ENABLED_STORAGE_KEY);
+    if (storedAudio === "true") {
+      setAudioEnabled(true);
+      audioEnabledRef.current = true;
+    }
   }, []);
 
   const handleOrderTypeChange = (nextType: CashOrderType) => {
@@ -165,7 +186,7 @@ export default function CajaPage() {
     }
   };
 
-  const loadOrders = useCallback(async () => {
+  const loadOrders = useCallback(async (markAsKnown = false) => {
     try {
       setIsLoading(true);
       const response = await kitchenFetch(
@@ -179,8 +200,16 @@ export default function CajaPage() {
           resolveRequestError(payload, new Error("No se pudieron cargar las órdenes.")),
         );
       }
-      setOrders(payload?.orders ?? []);
+      const fetchedOrders: Order[] = payload?.orders ?? [];
+      setOrders(fetchedOrders);
       setError(null);
+      if (markAsKnown) {
+        // Marcar todos los pedidos existentes como conocidos al cargar la página,
+        // para no disparar alertas por pedidos que ya estaban antes de abrir Caja.
+        for (const order of fetchedOrders) {
+          notifiedOrderIdsRef.current.add(order.id);
+        }
+      }
     } catch (loadError) {
       setError(resolveRequestError(null, loadError));
     } finally {
@@ -218,13 +247,122 @@ export default function CajaPage() {
   }, [role, sourceFilter, typeFilter, userId]);
 
   useEffect(() => {
-    void loadOrders();
+    void loadOrders(true);
   }, [loadOrders]);
 
   useEffect(() => {
     void loadTodayPanel();
   }, [loadTodayPanel]);
 
+  const handleEnableAudio = useCallback(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+          .webkitAudioContext;
+      if (!AudioContextClass) return;
+
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContextClass();
+      }
+
+      void audioContextRef.current.resume().then(() => {
+        audioEnabledRef.current = true;
+        setAudioEnabled(true);
+        window.localStorage.setItem(AUDIO_ENABLED_STORAGE_KEY, "true");
+        // Tono de confirmación
+        if (audioContextRef.current) {
+          playNewOrderTones(audioContextRef.current);
+        }
+      });
+    } catch {
+      /* ignore — alerta visual seguirá funcionando */
+    }
+  }, []);
+
+  const notifyNewOrder = useCallback(
+    (order: AlertOrder) => {
+      // Deduplicación: un order_id genera como máximo una alerta por sesión.
+      if (notifiedOrderIdsRef.current.has(order.id)) return;
+      notifiedOrderIdsRef.current.add(order.id);
+
+      setAlertOrder(order);
+      setPrintAlertError(null);
+      if (alertTimerRef.current) {
+        window.clearTimeout(alertTimerRef.current);
+      }
+      alertTimerRef.current = window.setTimeout(() => {
+        setAlertOrder(null);
+      }, 30000);
+
+      // Sonido — solo si el audio está desbloqueado por el usuario.
+      if (audioContextRef.current && audioEnabledRef.current) {
+        const ctx = audioContextRef.current;
+        if (ctx.state === "suspended") {
+          void ctx.resume().then(() => playNewOrderTones(ctx));
+        } else {
+          playNewOrderTones(ctx);
+        }
+      }
+
+      void loadOrders();
+      void loadTodayPanel();
+    },
+    [loadOrders, loadTodayPanel],
+  );
+
+  const handleCloseAlert = useCallback(() => {
+    setAlertOrder(null);
+    if (alertTimerRef.current) {
+      window.clearTimeout(alertTimerRef.current);
+    }
+  }, []);
+
+  const handlePrintAlert = useCallback(
+    async (orderId: number) => {
+      setIsPrintingAlert(true);
+      setPrintAlertError(null);
+      try {
+        const ticketRes = await kitchenFetch(
+          `/api/orders/${orderId}/ticket`,
+          undefined,
+          { role, userId },
+        );
+        const ticketPayload = await ticketRes.json();
+        if (!ticketRes.ok) {
+          throw new Error(
+            typeof ticketPayload?.error === "string"
+              ? ticketPayload.error
+              : "No se pudo obtener el ticket.",
+          );
+        }
+        const ticketText = String(ticketPayload?.ticket_text ?? "").trim();
+        if (!ticketText) {
+          throw new Error("El ticket está vacío.");
+        }
+        await printRawBT(ticketText);
+        await kitchenFetch(
+          `/api/orders/${orderId}/printed`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type: "customer" }),
+          },
+          { role, userId },
+        );
+      } catch (err) {
+        setPrintAlertError(
+          err instanceof Error ? err.message : "No se pudo imprimir el ticket.",
+        );
+      } finally {
+        setIsPrintingAlert(false);
+      }
+    },
+    [role, userId],
+  );
+
+  // ── Realtime: canal principal de pedidos nuevos ──────────────────────────
   useEffect(() => {
     const channel = supabaseBrowser.channel("caja-orders");
 
@@ -232,20 +370,22 @@ export default function CajaPage() {
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "orders" },
       (payload) => {
-        const paymentStatus = payload.new?.payment_status;
-        if (paymentStatus && paymentStatus !== "AWAITING_PAYMENT") {
-          return;
+        const paymentStatus = payload.new?.payment_status as string | undefined;
+        if (paymentStatus && paymentStatus !== "AWAITING_PAYMENT") return;
+
+        const orderId = payload.new?.id as number | undefined;
+        const orderNumber = payload.new?.order_number as number | undefined;
+        const orderType = payload.new?.type as string | undefined;
+        const totalCents = payload.new?.total_cents as number | undefined;
+
+        if (orderId && orderNumber && orderType) {
+          notifyNewOrder({
+            id: orderId,
+            order_number: orderNumber,
+            type: orderType,
+            total_cents: totalCents ?? 0,
+          });
         }
-        setShowAlert(true);
-        if (alertTimerRef.current) {
-          window.clearTimeout(alertTimerRef.current);
-        }
-        alertTimerRef.current = window.setTimeout(() => {
-          setShowAlert(false);
-        }, 8000);
-        playNewOrderSound();
-        void loadOrders();
-        void loadTodayPanel();
       },
     );
 
@@ -257,7 +397,38 @@ export default function CajaPage() {
       }
       supabaseBrowser.removeChannel(channel);
     };
-  }, [loadOrders, loadTodayPanel]);
+  }, [notifyNewOrder]);
+
+  // ── Polling: fallback de 15 s si Realtime falla ──────────────────────────
+  useEffect(() => {
+    if (!role || !userId) return;
+
+    const pollId = window.setInterval(async () => {
+      try {
+        const res = await kitchenFetch(
+          "/api/orders?payment_status=AWAITING_PAYMENT",
+          undefined,
+          { role, userId },
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        const pollOrders: Order[] = data?.orders ?? [];
+        for (const order of pollOrders) {
+          if (!notifiedOrderIdsRef.current.has(order.id)) {
+            const total = resolveOrderTotal(order);
+            notifyNewOrder({
+              id: order.id,
+              order_number: order.order_number,
+              type: order.type,
+              total_cents: total,
+            });
+          }
+        }
+      } catch { /* ignore poll errors — Realtime es el canal principal */ }
+    }, 15000);
+
+    return () => window.clearInterval(pollId);
+  }, [role, userId, notifyNewOrder]);
 
   const sortedOrders = useMemo(() => {
     return [...orders].sort(
@@ -346,11 +517,19 @@ export default function CajaPage() {
                 Para llevar
               </Button>
             </div>
-            <Button size="lg" variant="secondary" onClick={loadOrders}>
+            <Button size="lg" variant="secondary" onClick={() => void loadOrders()}>
               Actualizar
             </Button>
             <Button size="lg" variant="secondary" onClick={loadTodayPanel}>
               Refrescar hoy
+            </Button>
+            <Button
+              size="lg"
+              variant={audioEnabled ? "primary" : "secondary"}
+              type="button"
+              onClick={handleEnableAudio}
+            >
+              {audioEnabled ? "🔊 Alertas activadas" : "🔊 Activar alertas"}
             </Button>
           </div>
         </TopBar>
@@ -488,9 +667,47 @@ export default function CajaPage() {
           )}
         </Card>
 
-        {showAlert && (
-          <div className="rounded-2xl border border-cta/40 bg-cta/10 px-6 py-4 text-lg font-semibold text-ink">
-            ¡Llegó una nueva orden! Revísala en caja.
+        {alertOrder && (
+          <div className="rounded-2xl border-2 border-cta bg-cta/10 px-6 py-5 shadow-lg">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold uppercase tracking-wide text-cta">
+                  Nuevo pedido
+                </p>
+                <h2 className="text-2xl font-bold text-ink">
+                  Pedido #{String(alertOrder.order_number).padStart(3, "0")}
+                </h2>
+                <p className="text-base font-semibold text-muted">
+                  {alertTypeLabels[alertOrder.type] ?? alertOrder.type}
+                  {" · "}
+                  {formatCurrencyMxn(alertOrder.total_cents)}
+                </p>
+                {printAlertError && (
+                  <p className="text-sm font-semibold text-rose-700">
+                    {printAlertError}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  type="button"
+                  onClick={() => void handlePrintAlert(alertOrder.id)}
+                  disabled={isPrintingAlert}
+                >
+                  {isPrintingAlert ? "Imprimiendo..." : "Imprimir ticket"}
+                </Button>
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  type="button"
+                  onClick={handleCloseAlert}
+                >
+                  Cerrar
+                </Button>
+              </div>
+            </div>
           </div>
         )}
 

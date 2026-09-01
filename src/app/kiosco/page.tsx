@@ -13,6 +13,7 @@ import { ProductCard } from "@/components/ui/ProductCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { TopBar } from "@/components/ui/TopBar";
 import { printRawBT } from "@/lib/printing/rawbt";
+import { supabaseBrowser } from "@/lib/supabase/client";
 
 type OrderType = "DINEIN" | "TAKEOUT" | "DELIVERY";
 type Station = "PLANCHA" | "FREIDORA";
@@ -301,6 +302,34 @@ export default function KioscoPage() {
   } | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [hasCustomerSession, setHasCustomerSession] = useState(false);
+  const [customerUsername, setCustomerUsername] = useState<string | null>(null);
+  const [isDeliveryFormOpen, setIsDeliveryFormOpen] = useState(false);
+  const [deliveryAddress, setDeliveryAddress] = useState<{
+    name: string;
+    phone: string;
+    street: string;
+    neighborhood: string;
+    references: string;
+  } | null>(null);
+  const [deliveryFormName, setDeliveryFormName] = useState("");
+  const [deliveryFormPhone, setDeliveryFormPhone] = useState("");
+  const [deliveryFormStreet, setDeliveryFormStreet] = useState("");
+  const [deliveryFormNeighborhood, setDeliveryFormNeighborhood] = useState("");
+  const [deliveryFormReferences, setDeliveryFormReferences] = useState("");
+  const [deliveryFormError, setDeliveryFormError] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabaseBrowser.auth.getSession().then(({ data: { session } }) => {
+      setHasCustomerSession(Boolean(session));
+      setCustomerUsername((session?.user?.user_metadata as { username?: string } | null)?.username ?? null);
+    });
+    const { data: { subscription } } = supabaseBrowser.auth.onAuthStateChange((_event, session) => {
+      setHasCustomerSession(Boolean(session));
+      setCustomerUsername((session?.user?.user_metadata as { username?: string } | null)?.username ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   const loadProducts = useCallback(async (showLoading: boolean) => {
     try {
@@ -801,6 +830,21 @@ export default function KioscoPage() {
     );
   };
 
+  const handleConfirmDeliveryAddress = () => {
+    const name = deliveryFormName.trim();
+    const phone = deliveryFormPhone.trim();
+    const street = deliveryFormStreet.trim();
+    const neighborhood = deliveryFormNeighborhood.trim();
+    if (!name || !phone || !street || !neighborhood) {
+      setDeliveryFormError("Por favor completa nombre, teléfono, calle y colonia.");
+      return;
+    }
+    setDeliveryFormError(null);
+    setDeliveryAddress({ name, phone, street, neighborhood, references: deliveryFormReferences.trim() });
+    setIsDeliveryFormOpen(false);
+    setOrderType("DELIVERY");
+  };
+
   const handleResetOrder = () => {
     setOrderType(null);
     setCartItems([]);
@@ -811,6 +855,14 @@ export default function KioscoPage() {
     setPrintError(null);
     setIsConfirmOpen(false);
     setIsCartSheetOpen(false);
+    setDeliveryAddress(null);
+    setDeliveryFormName("");
+    setDeliveryFormPhone("");
+    setDeliveryFormStreet("");
+    setDeliveryFormNeighborhood("");
+    setDeliveryFormReferences("");
+    setDeliveryFormError(null);
+    setIsDeliveryFormOpen(false);
     closeAlitasSelector();
     closeItemCustomizer();
   };
@@ -854,7 +906,7 @@ export default function KioscoPage() {
     if (!orderType || cartItems.length === 0) {
       return;
     }
-    if (deliveryFeeError) {
+    if (!hasCustomerSession && deliveryFeeError) {
       setSubmitError(deliveryFeeError);
       return;
     }
@@ -862,15 +914,31 @@ export default function KioscoPage() {
     setSubmitError(null);
 
     try {
+      const fetchHeaders: Record<string, string> = { "Content-Type": "application/json" };
+      if (hasCustomerSession) {
+        const { data: { session } } = await supabaseBrowser.auth.getSession();
+        if (session?.access_token) {
+          fetchHeaders["Authorization"] = `Bearer ${session.access_token}`;
+        }
+      }
+
+      const isCustomerDelivery = hasCustomerSession && orderType === "DELIVERY";
       const response = await fetch("/api/orders", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: fetchHeaders,
         body: JSON.stringify({
           type: orderType,
-          customer_name: null,
-          customer_phone: null,
+          customer_name: isCustomerDelivery ? (deliveryAddress?.name ?? null) : null,
+          customer_phone: isCustomerDelivery ? (deliveryAddress?.phone ?? null) : null,
+          address_json: isCustomerDelivery && deliveryAddress
+            ? {
+                street: deliveryAddress.street,
+                neighborhood: deliveryAddress.neighborhood,
+                references: deliveryAddress.references || null,
+              }
+            : null,
           notes: orderNotes.trim() || null,
-          delivery_fee_cents: deliveryFeeCents,
+          delivery_fee_cents: hasCustomerSession ? 0 : deliveryFeeCents,
           items: cartItems.flatMap((item) => {
             const formattedNotes = formatItemNotes(item) || null;
 
@@ -959,6 +1027,150 @@ export default function KioscoPage() {
   };
 
   if (!orderType && !orderConfirmation) {
+    if (hasCustomerSession) {
+      return (
+        <div className="min-h-screen bg-transparent px-6 py-10 text-ink sm:px-10">
+          <section className="mx-auto flex w-full max-w-5xl flex-col gap-10">
+            <TopBar>
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-wide text-muted">
+                  Mi pedido
+                </p>
+                <h1 className="text-4xl font-bold text-ink">
+                  {customerUsername ? `Hola, ${customerUsername}` : "¿Cómo pedimos?"}
+                </h1>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <Link href="/cliente" className={topBarSecondaryLink}>
+                  Mi cuenta
+                </Link>
+                <StatusBadge status="nuevo" />
+              </div>
+            </TopBar>
+
+            <Card className="space-y-4">
+              <CardTitle>¿Cómo quieres tu pedido?</CardTitle>
+              <CardDescription>
+                Elige si lo recoges en el local o lo recibimos a domicilio.
+              </CardDescription>
+            </Card>
+
+            <BottomActions className="gap-6">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-wide text-muted">
+                  Tipo de entrega
+                </p>
+                <p className="text-lg font-semibold">
+                  Selecciona una opción para continuar.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-4">
+                <Button size="xl" onClick={() => setOrderType("TAKEOUT")}>
+                  Recoger en Cachu
+                </Button>
+                <Button
+                  size="xl"
+                  variant="secondary"
+                  onClick={() => setIsDeliveryFormOpen(true)}
+                >
+                  A domicilio
+                </Button>
+              </div>
+            </BottomActions>
+          </section>
+
+          {isDeliveryFormOpen ? (
+            <Modal onClose={() => { setIsDeliveryFormOpen(false); setDeliveryFormError(null); }}>
+              <ModalPanel className="max-w-lg space-y-5">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-wide text-muted">
+                    Entrega a domicilio
+                  </p>
+                  <h2 className="text-2xl font-bold text-ink">¿A dónde enviamos?</h2>
+                </div>
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-sm font-semibold text-muted" htmlFor="df-name">
+                      Nombre de quien recibe
+                    </label>
+                    <Input
+                      id="df-name"
+                      placeholder="Nombre completo"
+                      value={deliveryFormName}
+                      onChange={(e) => setDeliveryFormName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-semibold text-muted" htmlFor="df-phone">
+                      Teléfono
+                    </label>
+                    <Input
+                      id="df-phone"
+                      type="tel"
+                      placeholder="10 dígitos"
+                      value={deliveryFormPhone}
+                      onChange={(e) => setDeliveryFormPhone(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-semibold text-muted" htmlFor="df-street">
+                      Calle y número
+                    </label>
+                    <Input
+                      id="df-street"
+                      placeholder="Ej. Av. Principal 123"
+                      value={deliveryFormStreet}
+                      onChange={(e) => setDeliveryFormStreet(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-semibold text-muted" htmlFor="df-neighborhood">
+                      Colonia
+                    </label>
+                    <Input
+                      id="df-neighborhood"
+                      placeholder="Nombre de la colonia"
+                      value={deliveryFormNeighborhood}
+                      onChange={(e) => setDeliveryFormNeighborhood(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-semibold text-muted" htmlFor="df-references">
+                      Referencias (opcional)
+                    </label>
+                    <Input
+                      id="df-references"
+                      placeholder="Ej. Casa azul, entre calles..."
+                      value={deliveryFormReferences}
+                      onChange={(e) => setDeliveryFormReferences(e.target.value)}
+                    />
+                  </div>
+                  {deliveryFormError ? (
+                    <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                      {deliveryFormError}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <Button size="lg" onClick={handleConfirmDeliveryAddress}>
+                    Confirmar dirección
+                  </Button>
+                  <Button
+                    size="lg"
+                    variant="secondary"
+                    type="button"
+                    onClick={() => { setIsDeliveryFormOpen(false); setDeliveryFormError(null); }}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </ModalPanel>
+            </Modal>
+          ) : null}
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-transparent px-6 py-10 text-ink sm:px-10">
         <section className="mx-auto flex w-full max-w-5xl flex-col gap-10">
@@ -980,6 +1192,9 @@ export default function KioscoPage() {
                   </Link>
                 </>
               ) : null}
+              <Link href="/cliente/login" className={topBarSecondaryLink}>
+                Iniciar sesión
+              </Link>
               <StatusBadge status="nuevo" />
             </div>
           </TopBar>
@@ -1020,6 +1235,77 @@ export default function KioscoPage() {
   }
 
   if (orderConfirmation) {
+    if (hasCustomerSession) {
+      return (
+        <div className="min-h-screen bg-transparent px-6 py-10 text-ink sm:px-10">
+          <section className="mx-auto flex w-full max-w-4xl flex-col gap-10">
+            <TopBar>
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-wide text-muted">
+                  Pedido confirmado
+                </p>
+                <h1 className="text-4xl font-bold text-ink">
+                  ¡Gracias por tu compra!
+                </h1>
+              </div>
+              <StatusBadge status="listo" />
+            </TopBar>
+
+            <Card className="space-y-6 text-center">
+              <div className="space-y-3">
+                <p className="text-lg font-semibold text-muted">
+                  Pedido #{String(orderConfirmation.orderNumber).padStart(3, "0")}
+                </p>
+                <p className="text-6xl font-bold text-ink">
+                  {String(orderConfirmation.orderNumber).padStart(3, "0")}
+                </p>
+                <p className="text-base text-muted">
+                  {typeLabels[orderConfirmation.type]}
+                </p>
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-semibold uppercase tracking-wide text-muted">
+                  Resumen
+                </p>
+                <ul className="mt-3 space-y-2 text-base font-semibold text-ink">
+                  {orderConfirmation.items.map((item) => (
+                    <li
+                      key={item.cartItemId}
+                      className="flex items-center justify-between"
+                    >
+                      <span>
+                        {item.qty}× {item.name}
+                      </span>
+                      <span>{formatCurrency(item.priceCents * item.qty)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Card>
+
+            <BottomActions>
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-wide text-muted">
+                  ¿Qué sigue?
+                </p>
+                <p className="text-lg font-semibold">
+                  Tu pedido está en camino a cocina.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Link href="/cliente" className={topBarPrimaryLink}>
+                  Volver a mi cuenta
+                </Link>
+                <Button size="xl" variant="secondary" onClick={handleResetOrder}>
+                  Nuevo pedido
+                </Button>
+              </div>
+            </BottomActions>
+          </section>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-transparent px-6 py-10 text-ink sm:px-10">
         <section className="mx-auto flex w-full max-w-4xl flex-col gap-10">
@@ -1237,6 +1523,12 @@ export default function KioscoPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href={hasCustomerSession ? "/cliente" : "/cliente/login"}
+              className={topBarSecondaryLink}
+            >
+              {hasCustomerSession ? "Mi cuenta" : "Iniciar sesión"}
+            </Link>
             {isStaffMode ? (
               <>
                 <Link href="/cocina" className={topBarPrimaryLink}>
@@ -1359,7 +1651,7 @@ export default function KioscoPage() {
                   <span>{formatCurrency(totalCents)}</span>
                 </div>
               </div>
-              {isShippingOrderType(orderType) ? (
+              {isShippingOrderType(orderType) && !hasCustomerSession ? (
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-muted">
                     Costo de envío
@@ -1495,7 +1787,7 @@ export default function KioscoPage() {
                     <span>{formatCurrency(totalCents)}</span>
                   </div>
                 </div>
-                {isShippingOrderType(orderType) ? (
+                {isShippingOrderType(orderType) && !hasCustomerSession ? (
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-muted">
                       Costo de envío

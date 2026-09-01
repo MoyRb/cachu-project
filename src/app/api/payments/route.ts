@@ -49,6 +49,19 @@ export async function POST(request: NextRequest) {
       throw new Error(orderError?.message ?? 'Order not found');
     }
 
+    // Crear snapshot permanente + acreditar puntos de lealtad.
+    // Idempotente: re-ejecutar produce el mismo resultado sin duplicar puntos.
+    // No falla el pago si finalize tiene un error interno.
+    const numericOrderId = typeof orderId === 'number' ? orderId : Number(orderId);
+    if (Number.isInteger(numericOrderId)) {
+      const { error: finalizeError } = await supabase.rpc('finalize_customer_purchase', {
+        p_order_id: numericOrderId,
+      });
+      if (finalizeError && process.env.NODE_ENV === 'development') {
+        console.error('[payments] finalize_customer_purchase error:', finalizeError.message);
+      }
+    }
+
     return NextResponse.json({ ok: true, order });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';

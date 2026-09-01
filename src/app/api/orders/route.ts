@@ -211,23 +211,53 @@ export async function POST(request: NextRequest) {
 
     const roleHeader = request.headers.get('x-role')?.trim();
     const userIdHeader = request.headers.get('x-user-id')?.trim();
-    const isKioskRequest = !roleHeader || !userIdHeader;
+    const authorizationHeader = request.headers.get('authorization') ?? '';
+    const bearerToken = authorizationHeader.startsWith('Bearer ')
+      ? authorizationHeader.slice(7).trim()
+      : '';
+
+    // Tres modos excluyentes:
+    // STAFF   → headers x-role + x-user-id presentes
+    // CUSTOMER → Bearer token válido de Supabase Auth (sin headers de staff)
+    // KIOSK   → sin ninguno de los anteriores
+    const isStaffRequest = Boolean(roleHeader && userIdHeader);
+    const isCustomerRequest = !isStaffRequest && Boolean(bearerToken);
+    const isKioskRequest = !isStaffRequest && !isCustomerRequest;
+
     if (process.env.NODE_ENV === 'development') {
-      console.log('[orders] mode:', isKioskRequest ? 'KIOSCO' : 'STAFF');
+      const mode = isStaffRequest ? 'STAFF' : isCustomerRequest ? 'CUSTOMER' : 'KIOSK';
+      console.log('[orders] mode:', mode);
     }
 
-    if (isKioskRequest && type === 'DELIVERY') {
-      return jsonError('Delivery orders require admin role', 401);
-    }
-    if (isKioskRequest && !['DINEIN', 'TAKEOUT'].includes(type)) {
-      return jsonError('Invalid order type for kiosk', 401);
-    }
-
+    // STAFF: misma lógica anterior
     let auth: { role: Role } | null = null;
-    if (!isKioskRequest) {
+    if (isStaffRequest) {
       auth = getAuthContext(request);
       if (type === 'DELIVERY') {
         ensureRole(auth.role, ['ADMIN']);
+      }
+    }
+
+    // CUSTOMER: validar token, solo TAKEOUT o DELIVERY
+    let customerId: string | null = null;
+    if (isCustomerRequest) {
+      const { data: { user }, error: tokenError } = await supabase.auth.getUser(bearerToken);
+      if (tokenError || !user) {
+        return jsonError('No autorizado.', 401);
+      }
+      if (!['TAKEOUT', 'DELIVERY'].includes(type)) {
+        return jsonError('Tipo de pedido no válido para clientes.', 400);
+      }
+      customerId = user.id;
+    }
+
+    // KIOSK: solo DINEIN o TAKEOUT, sin DELIVERY
+    if (isKioskRequest) {
+      if (type === 'DELIVERY') {
+        return jsonError('Delivery orders require admin role', 401);
+      }
+      if (!['DINEIN', 'TAKEOUT'].includes(type)) {
+        return jsonError('Invalid order type for kiosk', 401);
       }
     }
 
@@ -264,6 +294,49 @@ export async function POST(request: NextRequest) {
         group_id: item.group_id ?? null
       };
     });
+
+    // CUSTOMER REQUESTS: override name/price/station with server-authoritative DB values.
+    // The browser must never be trusted to set the price of a product.
+    if (isCustomerRequest) {
+      const productIds = rpcItems
+        .map((item) => item.product_id)
+        .filter((id): id is number => id !== null);
+
+      if (productIds.length !== rpcItems.length) {
+        return jsonError('Todos los productos deben tener un ID válido.');
+      }
+
+      const { data: dbProducts, error: productsError } = await supabase
+        .from('products')
+        .select('id, name, price_cents, station, is_available')
+        .in('id', productIds);
+
+      if (productsError) {
+        throw new Error(productsError.message);
+      }
+
+      type DbProduct = { id: number; name: string; price_cents: number; station: string; is_available: boolean };
+      const productMap = new Map<number, DbProduct>(
+        (dbProducts ?? []).map((p) => [p.id as number, p as unknown as DbProduct])
+      );
+
+      for (const item of rpcItems) {
+        if (item.product_id === null) {
+          return jsonError('Todos los productos deben tener un ID válido.');
+        }
+        const dbProduct = productMap.get(item.product_id);
+        if (!dbProduct) {
+          return jsonError(`Producto no encontrado: ${String(item.product_id)}`);
+        }
+        if (!dbProduct.is_available) {
+          return jsonError(`El producto "${dbProduct.name}" no está disponible.`);
+        }
+        // Override with server-authoritative values — browser cannot set the price.
+        item.name_snapshot = dbProduct.name;
+        item.price_cents_snapshot = dbProduct.price_cents;
+        item.station = dbProduct.station;
+      }
+    }
 
     for (const item of rpcItems) {
       if (!item.name_snapshot) {
@@ -378,7 +451,19 @@ export async function POST(request: NextRequest) {
       throw new Error(ticketError.message);
     }
 
-    if (isKioskRequest) {
+    // Vincular customer_id si el pedido fue hecho por un cliente autenticado.
+    // Nunca confiar en customer_id del body; siempre viene del token validado.
+    if (customerId) {
+      const { error: customerLinkError } = await supabase
+        .from('orders')
+        .update({ customer_id: customerId })
+        .eq('id', orderId);
+      if (customerLinkError) {
+        throw new Error(`Failed to link customer: ${customerLinkError.message}`);
+      }
+    }
+
+    if (isKioskRequest || isCustomerRequest) {
       return NextResponse.json(
         {
           order_id: String(orderId),
