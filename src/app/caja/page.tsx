@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TopBar } from "@/components/ui/TopBar";
-import { useKitchenRole } from "@/hooks/useKitchenRole";
+import { useCajaSession } from "@/hooks/useCajaSession";
 import { kitchenFetch } from "@/lib/kitchen/fetch";
 import type { Order } from "@/lib/kitchen/types";
 import { printRawBT } from "@/lib/printing/rawbt";
@@ -53,6 +53,7 @@ type TodayOrder = {
   status: string;
   payment_status: "AWAITING_PAYMENT" | "PAID" | "CANCELLED";
   total_cents: number;
+  printed_customer_at: string | null;
 };
 
 type TodaySummary = {
@@ -136,7 +137,9 @@ const resolveRequestError = (data: unknown, err: unknown) =>
       : String(err);
 
 export default function CajaPage() {
-  const { role, userId } = useKitchenRole("ADMIN");
+  // Caja siempre usa rol ADMIN — useCajaSession nunca lee cachu_role de
+  // localStorage, por lo que no interfiere con las sesiones de cocina.
+  const { role, userId } = useCajaSession();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -160,6 +163,9 @@ export default function CajaPage() {
   const [todayError, setTodayError] = useState<string | null>(null);
   const [sourceFilter, setSourceFilter] = useState<OrderSourceFilter>("ALL");
   const [typeFilter, setTypeFilter] = useState<OrderTypeFilter>("ALL");
+  // Estado de impresión para pedidos (pendientes y tabla de hoy)
+  const [printingOrderId, setPrintingOrderId] = useState<number | null>(null);
+  const [printOrderError, setPrintOrderError] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -319,38 +325,49 @@ export default function CajaPage() {
     }
   }, []);
 
+  // Lógica central de impresión: GET ticket → printRawBT → PATCH printed.
+  // Lanza error si algún paso falla; no marca como impreso si printRawBT falla.
+  const doPrintOrder = useCallback(
+    async (orderId: number) => {
+      const ticketRes = await kitchenFetch(
+        `/api/orders/${orderId}/ticket`,
+        undefined,
+        { role, userId },
+      );
+      const ticketPayload = await ticketRes.json();
+      if (!ticketRes.ok) {
+        throw new Error(
+          typeof ticketPayload?.error === "string"
+            ? ticketPayload.error
+            : "No se pudo obtener el ticket.",
+        );
+      }
+      const ticketText = String(ticketPayload?.ticket_text ?? "").trim();
+      if (!ticketText) {
+        throw new Error("El ticket está vacío.");
+      }
+      await printRawBT(ticketText);
+      // Solo se llama a PATCH si printRawBT terminó correctamente.
+      await kitchenFetch(
+        `/api/orders/${orderId}/printed`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "customer" }),
+        },
+        { role, userId },
+      );
+    },
+    [role, userId],
+  );
+
+  // Impresión desde la alerta de pedido nuevo.
   const handlePrintAlert = useCallback(
     async (orderId: number) => {
       setIsPrintingAlert(true);
       setPrintAlertError(null);
       try {
-        const ticketRes = await kitchenFetch(
-          `/api/orders/${orderId}/ticket`,
-          undefined,
-          { role, userId },
-        );
-        const ticketPayload = await ticketRes.json();
-        if (!ticketRes.ok) {
-          throw new Error(
-            typeof ticketPayload?.error === "string"
-              ? ticketPayload.error
-              : "No se pudo obtener el ticket.",
-          );
-        }
-        const ticketText = String(ticketPayload?.ticket_text ?? "").trim();
-        if (!ticketText) {
-          throw new Error("El ticket está vacío.");
-        }
-        await printRawBT(ticketText);
-        await kitchenFetch(
-          `/api/orders/${orderId}/printed`,
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ type: "customer" }),
-          },
-          { role, userId },
-        );
+        await doPrintOrder(orderId);
       } catch (err) {
         setPrintAlertError(
           err instanceof Error ? err.message : "No se pudo imprimir el ticket.",
@@ -359,7 +376,27 @@ export default function CajaPage() {
         setIsPrintingAlert(false);
       }
     },
-    [role, userId],
+    [doPrintOrder],
+  );
+
+  // Impresión / reimpresión desde tarjetas de pedidos pendientes y tabla de hoy.
+  const handlePrintOrder = useCallback(
+    async (orderId: number) => {
+      setPrintingOrderId(orderId);
+      setPrintOrderError(null);
+      try {
+        await doPrintOrder(orderId);
+        // Refrescar para que el botón cambie a "Reimprimir ticket".
+        await Promise.all([loadOrders(), loadTodayPanel()]);
+      } catch (err) {
+        setPrintOrderError(
+          err instanceof Error ? err.message : "No se pudo imprimir el ticket.",
+        );
+      } finally {
+        setPrintingOrderId(null);
+      }
+    },
+    [doPrintOrder, loadOrders, loadTodayPanel],
   );
 
   // ── Realtime: canal principal de pedidos nuevos ──────────────────────────
@@ -401,7 +438,7 @@ export default function CajaPage() {
 
   // ── Polling: fallback de 15 s si Realtime falla ──────────────────────────
   useEffect(() => {
-    if (!role || !userId) return;
+    if (!userId) return;
 
     const pollId = window.setInterval(async () => {
       try {
@@ -627,6 +664,7 @@ export default function CajaPage() {
                   <th className="px-3 py-2">Status</th>
                   <th className="px-3 py-2">Pago</th>
                   <th className="px-3 py-2 text-right">Total MXN</th>
+                  <th className="px-3 py-2">Ticket</th>
                 </tr>
               </thead>
               <tbody>
@@ -649,11 +687,38 @@ export default function CajaPage() {
                     <td className="px-3 py-2 text-right font-semibold text-ink">
                       {formatCurrencyMxn(order.total_cents)}
                     </td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-col gap-1">
+                        <span
+                          className={cn(
+                            "text-xs font-semibold",
+                            order.printed_customer_at
+                              ? "text-green-600"
+                              : "text-muted",
+                          )}
+                        >
+                          {order.printed_customer_at ? "Impreso" : "No impreso"}
+                        </span>
+                        <Button
+                          size="md"
+                          variant="secondary"
+                          type="button"
+                          onClick={() => void handlePrintOrder(order.id)}
+                          disabled={printingOrderId === order.id}
+                        >
+                          {printingOrderId === order.id
+                            ? "Imprimiendo..."
+                            : order.printed_customer_at
+                              ? "Reimprimir"
+                              : "Imprimir"}
+                        </Button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
                 {!todayLoading && todayOrders.length === 0 && (
                   <tr>
-                    <td className="px-3 py-5 text-center text-muted" colSpan={7}>
+                    <td className="px-3 py-5 text-center text-muted" colSpan={8}>
                       No hay pedidos para hoy con los filtros seleccionados.
                     </td>
                   </tr>
@@ -717,6 +782,12 @@ export default function CajaPage() {
           </div>
         )}
 
+        {printOrderError && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-6 py-4 text-sm font-semibold text-red-700">
+            {printOrderError}
+          </div>
+        )}
+
         {isEmpty ? (
           <EmptyState
             title="Sin órdenes pendientes"
@@ -729,6 +800,7 @@ export default function CajaPage() {
           <div className="grid gap-4 lg:grid-cols-2">
             {sortedOrders.map((order) => {
               const total = resolveOrderTotal(order);
+              const isPrinted = Boolean(order.printed_customer_at);
               return (
                 <Card
                   key={order.id}
@@ -782,6 +854,19 @@ export default function CajaPage() {
                         </option>
                       ))}
                     </select>
+                    <Button
+                      size="lg"
+                      variant="secondary"
+                      type="button"
+                      onClick={() => void handlePrintOrder(order.id)}
+                      disabled={printingOrderId === order.id}
+                    >
+                      {printingOrderId === order.id
+                        ? "Imprimiendo..."
+                        : isPrinted
+                          ? "Reimprimir ticket"
+                          : "Imprimir ticket"}
+                    </Button>
                     <Button
                       size="lg"
                       onClick={() => handleMarkPaid(order)}

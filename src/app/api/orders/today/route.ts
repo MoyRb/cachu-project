@@ -22,6 +22,7 @@ type OrderRow = {
   total_cents?: number | null;
   subtotal_cents?: number | null;
   delivery_fee_cents?: number | null;
+  printed_customer_at?: string | null;
 };
 
 function jsonError(message: string, status = 400) {
@@ -101,7 +102,7 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from("orders")
       .select(
-        "id, order_number, created_at, source, type, status, payment_status, total_cents, subtotal_cents, delivery_fee_cents",
+        "id, order_number, created_at, source, type, status, payment_status, total_cents, subtotal_cents, delivery_fee_cents, printed_customer_at",
       )
       .gte("created_at", startIso)
       .lt("created_at", endIso)
@@ -175,6 +176,7 @@ export async function GET(request: NextRequest) {
         status: order.status,
         payment_status: order.payment_status ?? "AWAITING_PAYMENT",
         total_cents: resolveTotalCents(order),
+        printed_customer_at: order.printed_customer_at ?? null,
       })),
     });
   } catch (error) {
