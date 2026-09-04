@@ -3,9 +3,9 @@ import "./globals.css";
 import PwaRegister from "./pwa-register";
 
 export const metadata: Metadata = {
-  title: "Cachu Kiosco",
-  description: "Kiosco de pedidos de Cachu Burger",
-  applicationName: "Cachu Kiosco",
+  title: "Cachuburguer",
+  description: "Cachuburguer — pedidos en línea",
+  applicationName: "Cachuburguer",
 };
 
 export default function RootLayout({
