@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Cachuburguer",
-    short_name: "Cachuburguer",
+    name: "CACHUBURGER",
+    short_name: "CACHUBURGER",
     start_url: "/kiosco",
     display: "standalone",
     theme_color: "#111111",
